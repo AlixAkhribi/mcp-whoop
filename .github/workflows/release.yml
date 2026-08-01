@@ -1,0 +1,85 @@
+# What happens after a merge. The gates from `pr.yml` run again on a clean
+# machine, and then semantic-release reads the commits since the last tag and
+# decides whether this push is a release. Nobody bumps a version or types
+# `npm publish` — the commit messages are the release input (see
+# `release.config.js`).
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  # semantic-release pushes the `v${version}` tag, @semantic-release/github
+  # creates the release that hangs from it, and @semantic-release/git pushes
+  # the `chore: release …` commit that carries the bumped package.json and
+  # CHANGELOG.md back to main.
+  contents: write
+  # @semantic-release/github comments on the issues and pull requests a release
+  # closes; without these the comment is a 403 and the whole job fails after
+  # having already published.
+  issues: write
+  pull-requests: write
+  # The entire npm authentication story: the job mints a short-lived OIDC token
+  # and trades it with the registry for publish rights on `mcp-whoop`. There is
+  # deliberately no NPM_TOKEN secret in this repository — nothing long-lived to
+  # leak or rotate — and npm attaches a provenance attestation to OIDC publishes
+  # automatically.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Same reason as `pr.yml`: `CI=true` stopped skipping hooks in husky v9.
+      # It matters twice here — `prepare` runs on install, and again when
+      # `npm publish` packs the tarball.
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # semantic-release finds the last release from the tags and the next
+          # one from the commits since it; a depth-1 checkout has neither.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          # The major that wrote `pnpm-lock.yaml` (lockfileVersion 9.0).
+          version: 11
+
+      - uses: actions/setup-node@v7
+        with:
+          # Matches `pr.yml`: the floor of the `engines.node` range, which is
+          # set by lint-staged 17 (`>=22.22.1`) — a stricter bound than
+          # semantic-release 25's own `^22.14.0 || >=24.10.0`.
+          node-version: 22.22.1
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # A release is a publish, so the gates run before it rather than beside
+      # it — a failure here means nothing reaches the registry.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint and format
+        run: pnpm check
+
+      # `files: ["dist"]` makes the tarball whatever `dist/` holds when npm
+      # packs it, and `dist/` is gitignored. No `prepack` hook builds it, so
+      # skipping this step would publish an empty package.
+      - name: Build
+        run: pnpm build
+
+      - name: Release
+        env:
+          # Reads the repository and writes the GitHub release. The npm half of
+          # the job is OIDC and takes no token.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bootstrap only: trusted publishing can't create a package that has
+          # never been published, so the first release authenticates with a
+          # short-lived granular token instead. Once `mcp-whoop` exists and its
+          # trusted publisher is configured on npmjs.com, delete this line and
+          # the repository secret — OIDC takes over from then on.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm exec semantic-release

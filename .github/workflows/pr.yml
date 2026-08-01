@@ -1,0 +1,60 @@
+# The gates a pull request has to clear. They are the same checks the local
+# hooks in `.husky/` run, re-run on a clean machine, so nothing merges on the
+# strength of a `--no-verify` that only ever happened on a laptop.
+name: PR
+
+on: pull_request
+
+# Nothing in this job writes to the repository.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # husky's only supported bypass — `CI=true` stopped skipping hooks in v9.
+      # `prepare` runs on every install, and a runner has no commit to guard.
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The commitlint step below walks the whole base..head range; the
+          # default depth-1 checkout contains none of those commits.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          # The major that wrote `pnpm-lock.yaml` (lockfileVersion 9.0).
+          version: 11
+
+      - uses: actions/setup-node@v7
+        with:
+          # The floor of the `engines.node` range in package.json, pinned
+          # exactly so CI proves the project builds on the oldest Node it
+          # claims to support rather than only on whatever is current.
+          node-version: 22.22.1
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint and format
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # A rebase merge lands every commit of the PR on main individually, so
+      # each one has to satisfy the convention on its own — linting just the PR
+      # title, or just the head commit, would let the rest of them through.
+      - name: Commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
