@@ -1,0 +1,11 @@
+# Line endings are LF everywhere — in the repository and in every working tree.
+#
+# Git's Windows default (`core.autocrlf=true`) stores LF but smudges it back to
+# CRLF on checkout, and lint-staged's stash/restore round-trip re-smudges files
+# in the middle of a commit. Biome's formatter enforces LF, so the pre-commit
+# gate would reject files git itself had just rewritten. `eol=lf` overrides
+# `core.autocrlf` per-repo, so this holds without any local git config; the shell
+# hooks in `.husky/` also need LF to stay executable.
+#
+# `text=auto` keeps git's binary detection intact — binaries are left untouched.
+* text=auto eol=lf

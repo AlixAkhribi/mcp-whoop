@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+.vitest-cache/
+
+# Environment & secrets — WHOOP credentials must never be committed
+.env
+.env.*
+!.env.example
+
+# Package tarballs from local `pnpm pack` / `npm pack`
+*.tgz
+
+# Logs
+*.log
+logs/
+
+# Tooling state
+.claude/settings.local.json
+.eslintcache
+.turbo/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS cruft
+.DS_Store
+Thumbs.db
+Desktop.ini
