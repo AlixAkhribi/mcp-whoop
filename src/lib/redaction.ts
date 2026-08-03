@@ -1,0 +1,60 @@
+/**
+ * @file Keeps token material — access tokens, refresh tokens, the client
+ * secret, authorization codes — off every outward surface, including when
+ * WHOOP's own error bodies echo it back. Secrets are registered where they
+ * enter the process, and outward formatters scrub through
+ * {@link redactSecrets}, so new tools inherit the behaviour by using them.
+ */
+
+const REDACTED = "[redacted]";
+
+/** Registered secrets, stored verbatim so they can be matched exactly. */
+const knownSecrets = new Set<string>();
+
+/**
+ * Registers values to be scrubbed from outward surfaces. Call at the seams
+ * secrets enter: the token store, WHOOP's token responses, the environment.
+ *
+ * Empty and absent values are ignored — registering `""` would match at every
+ * position and destroy the whole message.
+ */
+export function registerSecrets(...values: (string | undefined)[]): void {
+	for (const value of values) {
+		if (value) {
+			knownSecrets.add(value);
+		}
+	}
+}
+
+/** Replaces every registered secret in the given text with a marker. */
+export function redactSecrets(text: string): string {
+	let scrubbed = text;
+	for (const secret of knownSecrets) {
+		scrubbed = scrubbed.split(secret).join(REDACTED);
+	}
+
+	return scrubbed;
+}
+
+/** An error's message, scrubbed, safe for an outward surface to carry. */
+export function describeRedacted(error: unknown): string {
+	return redactSecrets(error instanceof Error ? error.message : String(error));
+}
+
+/**
+ * Wraps a tool handler so anything it throws carries a redacted message.
+ *
+ * The MCP SDK puts a thrown error's message on the wire verbatim as the tool
+ * error, making this the only seam where a tool's failures can be scrubbed.
+ */
+export function redactingErrors<A extends unknown[], R>(
+	handler: (...args: A) => Promise<R>,
+): (...args: A) => Promise<R> {
+	return async (...args) => {
+		try {
+			return await handler(...args);
+		} catch (error) {
+			throw new Error(describeRedacted(error));
+		}
+	};
+}
