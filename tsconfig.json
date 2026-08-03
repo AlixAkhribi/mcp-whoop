@@ -1,15 +1,26 @@
 {
+	// Type-checking only: tsdown owns emit (see tsdown.config.ts), so imports
+	// follow bundler resolution — extensionless, with "@/…" mapping to "src/…" —
+	// the pairing the TypeScript handbook prescribes for bundled projects.
 	"compilerOptions": {
 		"strict": true,
 		"target": "es2022",
-		"module": "nodenext",
-		"moduleResolution": "nodenext",
-		"rootDir": "./src",
-		"outDir": "./dist",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"esModuleInterop": true,
+		"isolatedModules": true,
+		// `src/index.ts` has only dynamic imports, which module detection does
+		// not count; without this its top-level `await` would be an error.
+		"moduleDetection": "force",
+		"noEmit": true,
+		"paths": {
+			"@/*": ["./src/*"]
+		},
 		"types": ["node"],
-		"skipLibCheck": false,
-		"declaration": true,
-		"sourceMap": true
+		"skipLibCheck": false
 	},
-	"include": ["src"]
+	// tsdown.config.ts stays out: under `skipLibCheck: false` its import of
+	// tsdown's types would fail on the optional peers (publint, @tsdown/css, …)
+	// those declarations reference. tsdown itself validates it at build time.
+	"include": ["src", "tests", "vitest.config.ts"]
 }
