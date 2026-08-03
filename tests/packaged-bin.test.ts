@@ -16,7 +16,7 @@ const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const isWindows = process.platform === "win32";
 
-/** The bin name this package is published under (ADR 0001). */
+/** The bin name this package is published under — not the repository name. */
 const BIN_NAME = "mcp-whoop";
 
 /**
@@ -118,6 +118,61 @@ async function installedManifest(): Promise<{ bin?: Record<string, string> }> {
 }
 
 /**
+ * The host environment minus every WHOOP credential, pointed at a scratch
+ * token store, so the installed bin sees a machine that has never logged in
+ * and never reads the real login of whoever runs the suite.
+ */
+function freshMachineEnvironment(): NodeJS.ProcessEnv {
+	const env: NodeJS.ProcessEnv = {
+		...process.env,
+		WHOOP_TOKEN_STORE: join(scratch, "token-store"),
+	};
+	for (const name of [
+		"WHOOP_CLIENT_ID",
+		"WHOOP_CLIENT_SECRET",
+		"WHOOP_REDIRECT_URI",
+	]) {
+		delete env[name];
+	}
+
+	return env;
+}
+
+/**
+ * Runs the installed bin the way `npx mcp-whoop <args>` would and reports how
+ * it ended. Both streams come back as one string, since the assertions care
+ * that the user was told something, not which pipe carried it.
+ */
+async function runInstalledBin(
+	entry: string,
+	args: string[],
+): Promise<{ code: number; output: string }> {
+	try {
+		const { stdout, stderr } = await runFile(
+			process.execPath,
+			[entry, ...args],
+			{
+				cwd: scratch,
+				env: freshMachineEnvironment(),
+			},
+		);
+
+		return { code: 0, output: stdout + stderr };
+	} catch (error) {
+		const failure = error as {
+			code?: number;
+			stdout?: string;
+			stderr?: string;
+		};
+
+		return {
+			code: failure.code ?? 1,
+			output: `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
+		};
+	}
+}
+
+/**
  * Connects a real MCP client to a script over stdio. The transport owns the
  * child process, so closing the client is what reaps it — hence the `finally`.
  */
@@ -130,6 +185,7 @@ async function withClient<T>(
 		command: process.execPath,
 		args: [entry],
 		cwd: dirname(entry),
+		env: { WHOOP_TOKEN_STORE: join(scratch, "token-store") },
 	});
 
 	await client.connect(transport);
@@ -141,7 +197,7 @@ async function withClient<T>(
 }
 
 describe("the packed and installed package", () => {
-	it("greets over stdio through the bin it declares", async () => {
+	it("serves the WHOOP tools over stdio through the bin it declares", async () => {
 		const { bin } = await installedManifest();
 		expect(bin?.[BIN_NAME]).toEqual(expect.any(String));
 
@@ -150,19 +206,31 @@ describe("the packed and installed package", () => {
 			/^#!\/usr\/bin\/env node\r?\n/,
 		);
 
-		const { tools, greeting } = await withClient(entry, async (client) => ({
+		const { tools, profile } = await withClient(entry, async (client) => ({
 			tools: (await client.listTools()).tools.map((tool) => tool.name),
-			greeting: await client.callTool({
-				name: "hello",
-				arguments: { name: "Ada" },
+			profile: await client.callTool({
+				name: "get_profile",
+				arguments: {},
 			}),
 		}));
 
-		expect(tools).toContain("hello");
-		expect(greeting.isError).toBeFalsy();
-		expect(greeting.content).toEqual([
-			{ type: "text", text: expect.stringContaining("Ada") },
-		]);
+		expect(tools).toContain("get_profile");
+		expect(profile.isError).toBe(true);
+		expect(JSON.stringify(profile.content)).toContain("npx mcp-whoop login");
+	}, 60_000);
+
+	it("validates the login environment from the installed package", async () => {
+		const { bin } = await installedManifest();
+		const entry = resolve(installedPackage, bin?.[BIN_NAME] ?? "");
+
+		const { code, output } = await runInstalledBin(entry, ["login"]);
+
+		// A machine that runs `login` before setting any variables is told
+		// exactly which ones it is missing, not merely that something is wrong.
+		expect(code).not.toBe(0);
+		expect(output).toContain("WHOOP_CLIENT_ID");
+		expect(output).toContain("WHOOP_CLIENT_SECRET");
+		expect(output).toContain("WHOOP_REDIRECT_URI");
 	}, 60_000);
 
 	it("ships the built output and nothing a consumer cannot use", async () => {
