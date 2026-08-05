@@ -1,5 +1,12 @@
 import { exec, execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,18 +56,35 @@ let tarball = "";
 let installedPackage = "";
 
 /**
+ * The archive `npm pack` just wrote into the scratch directory, found by
+ * looking rather than by reading the filename off stdout. npm runs `prepare`
+ * before packing and lets it share the stream, so anything that script prints
+ * lands there too — husky's `HUSKY=0 skip install` notice, which CI provokes
+ * and which carries no trailing newline, would otherwise be glued to the front
+ * of the name. The directory is made fresh above and holds exactly one `.tgz`.
+ */
+async function packedTarball(): Promise<string> {
+	const [archive, ...extras] = (await readdir(scratch)).filter((entry) =>
+		entry.endsWith(".tgz"),
+	);
+	if (!archive || extras.length > 0) {
+		throw new Error(
+			`expected one packed tarball in ${scratch}, found ${archive ? 1 + extras.length : 0}`,
+		);
+	}
+
+	return archive;
+}
+
+/**
  * Packs a real tarball from the built project and installs it into a throwaway
  * consumer project, so every assertion below sees what npm would publish and
  * what `npx mcp-whoop` would run.
  */
 beforeAll(async () => {
 	scratch = await mkdtemp(join(tmpdir(), "mcp-whoop-pack-"));
-	const { stdout } = await runCli(
-		"npm",
-		["pack", repoRoot, "--silent"],
-		scratch,
-	);
-	tarball = join(scratch, stdout.trim().split(/\r?\n/).at(-1) ?? "");
+	await runCli("npm", ["pack", repoRoot, "--silent"], scratch);
+	tarball = join(scratch, await packedTarball());
 
 	const consumer = join(scratch, "consumer");
 	await mkdir(consumer);
