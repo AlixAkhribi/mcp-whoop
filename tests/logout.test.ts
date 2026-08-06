@@ -69,20 +69,41 @@ type FakeWhoop = {
 	readonly requests: WhoopRequest[];
 };
 
+/** One canned answer the stand-in WHOOP's token endpoint gives. */
+type TokenAnswer = {
+	status: number;
+	body: unknown;
+};
+
 /**
  * A stand-in WHOOP that records every request and answers each with the given
- * status — 204 plays a WHOOP that revoked, 500 one that fell over.
+ * status — 204 plays a WHOOP that revoked, 500 one that fell over. The token
+ * endpoint is scripted apart from the revocation, since a logout that finds an
+ * expired login asks this same WHOOP two different questions.
  */
-async function startFakeWhoop(status = 204): Promise<FakeWhoop> {
+async function startFakeWhoop(
+	status = 204,
+	token?: TokenAnswer,
+): Promise<FakeWhoop> {
 	const requests: WhoopRequest[] = [];
 	const server = createServer((request, response) => {
+		const path = new URL(request.url ?? "/", "http://whoop.invalid").pathname;
 		requests.push({
 			method: request.method ?? "",
-			path: new URL(request.url ?? "/", "http://whoop.invalid").pathname,
+			path,
 			authorization: request.headers.authorization,
 		});
 		request.resume();
 		request.on("end", () => {
+			if (token && path === "/oauth/oauth2/token") {
+				response.writeHead(token.status, {
+					"content-type": "application/json",
+					connection: "close",
+				});
+				response.end(JSON.stringify(token.body));
+
+				return;
+			}
 			response.writeHead(status, { connection: "close" });
 			response.end();
 		});
@@ -98,6 +119,47 @@ const SEEDED_TOKENS = {
 	expiresAt: Date.now() + 3_600_000,
 	scopes: ["read:profile", "offline"],
 };
+
+/**
+ * A login whose access token expired an hour ago, carrying the application
+ * credentials a refresh has to authenticate as. Every secret is spelled
+ * distinctively so a case can tell whether any of them reached the terminal.
+ */
+const EXPIRED_TOKENS = {
+	accessToken: "stored-access-token-aaaa",
+	refreshToken: "stored-refresh-token-bbbb",
+	expiresAt: Date.now() - 3_600_000,
+	scopes: ["read:profile", "offline"],
+	application: {
+		clientId: "a-client-id",
+		clientSecret: "a-client-secret-cccc",
+	},
+};
+
+/** What the scripted token endpoint hands back when it honors the refresh. */
+const ROTATED_TOKENS = {
+	access_token: "rotated-access-token-dddd",
+	refresh_token: "rotated-refresh-token-eeee",
+	expires_in: 3600,
+	scope: "read:profile offline",
+};
+
+/**
+ * Fails when anything the logout printed carries secret material: the pair the
+ * store held, the pair WHOOP rotated to, or the secret that signed the refresh.
+ * None of them has any business on a terminal.
+ */
+function expectNoTokenMaterial(output: string): void {
+	for (const secret of [
+		EXPIRED_TOKENS.accessToken,
+		EXPIRED_TOKENS.refreshToken,
+		EXPIRED_TOKENS.application.clientSecret,
+		ROTATED_TOKENS.access_token,
+		ROTATED_TOKENS.refresh_token,
+	]) {
+		expect(output).not.toContain(secret);
+	}
+}
 
 /**
  * Runs the built CLI's `logout` the way a user would — a real child process,
@@ -195,9 +257,79 @@ describe("the logout command", () => {
 			path: "/developer/v2/user/access",
 			authorization: "Bearer an-access-token",
 		});
+		// A login the store still trusts is revoked with exactly the token it
+		// holds: nothing here is worth spending a refresh token on.
+		expect(
+			whoop.requests.some((request) => request.path === "/oauth/oauth2/token"),
+		).toBe(false);
 		expect(existsSync(join(store, "tokens.json"))).toBe(false);
 		expect(code).toBe(0);
 		expect(output).toMatch(/logged out/i);
+	}, 30_000);
+
+	it("refreshes an expired login and revokes with the token that comes back", async () => {
+		const whoop = await startFakeWhoop(204, {
+			status: 200,
+			body: ROTATED_TOKENS,
+		});
+		const store = await temporaryStore();
+		await writeStoredTokens(EXPIRED_TOKENS, {
+			env: { WHOOP_TOKEN_STORE: store },
+		});
+
+		const { code, output } = await runLogout({
+			store,
+			whoopBaseUrl: whoop.baseUrl,
+		});
+
+		// One refresh, and then the revocation it was spent on: a dead bearer is
+		// all WHOOP would have seen without it.
+		expect(
+			whoop.requests.map((request) => `${request.method} ${request.path}`),
+		).toEqual(["POST /oauth/oauth2/token", "DELETE /developer/v2/user/access"]);
+		expect(whoop.requests).toContainEqual({
+			method: "DELETE",
+			path: "/developer/v2/user/access",
+			authorization: `Bearer ${ROTATED_TOKENS.access_token}`,
+		});
+		expect(existsSync(join(store, "tokens.json"))).toBe(false);
+		expect(code).toBe(0);
+		expect(output).toMatch(/logged out/i);
+		expectNoTokenMaterial(output);
+	}, 30_000);
+
+	it("still revokes with the stored token when the refresh is refused", async () => {
+		const whoop = await startFakeWhoop(401, {
+			status: 400,
+			body: {
+				error: "invalid_grant",
+				// WHOOP's refusals quote what they refused, so this one carries the
+				// refresh token straight back into the process.
+				error_description: `refresh token ${EXPIRED_TOKENS.refreshToken} is not acceptable`,
+			},
+		});
+		const store = await temporaryStore();
+		await writeStoredTokens(EXPIRED_TOKENS, {
+			env: { WHOOP_TOKEN_STORE: store },
+		});
+
+		const { code, output } = await runLogout({
+			store,
+			whoopBaseUrl: whoop.baseUrl,
+		});
+
+		// The stored token is the best one held once the refresh fails, and an
+		// unlikely revocation still beats no revocation at all.
+		expect(whoop.requests).toContainEqual({
+			method: "DELETE",
+			path: "/developer/v2/user/access",
+			authorization: `Bearer ${EXPIRED_TOKENS.accessToken}`,
+		});
+		expect(existsSync(join(store, "tokens.json"))).toBe(false);
+		expect(code).toBe(0);
+		expect(output).toMatch(/warning/i);
+		expect(output).toMatch(/may still be granted upstream/i);
+		expectNoTokenMaterial(output);
 	}, 30_000);
 
 	it("still deletes the store and exits 0 with a warning when the revoke answers 500", async () => {
