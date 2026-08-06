@@ -332,6 +332,34 @@ describe("token material never leaks", () => {
 		}
 	}, 30_000);
 
+	it("scrubs a long WHOOP error before capping it, keeping no token prefix", async () => {
+		// A rejection long enough to be cut, with the access token sitting exactly
+		// where the cut would fall: scrubbing only after cutting would leave the
+		// first characters of a live token standing in the clear, and a boundary
+		// the scrubber can no longer recognise is a boundary it cannot repair.
+		const buried = `${"A".repeat(288)}${ACCESS_TOKEN}${"F".repeat(600)}`;
+		const whoop = await startFakeWhoop({
+			profile: { status: 400, body: { message: buried } },
+		});
+		const store = await temporaryStore();
+		await seedLogin(store, { expired: false });
+
+		const call = await observeToolCall(
+			{ store, whoopBaseUrl: whoop.baseUrl },
+			"get_profile",
+		);
+
+		expect(call.failed).toBe(true);
+		for (const surface of [call.resultText, call.stderrText]) {
+			expect(surface).not.toContain(ACCESS_TOKEN);
+			expect(surface).not.toContain(ACCESS_TOKEN.slice(0, 12));
+			// Nothing of the 600 characters trailing the token survives the cap.
+			expect(surface).not.toMatch(/F{301}/);
+		}
+		// Capping takes WHOOP's words, never the sentence built around them.
+		expect(call.resultText).toContain("Retrying will not help.");
+	}, 30_000);
+
 	it("mirrors WHOOP's payload in a successful tool result without the bearer token", async () => {
 		const whoop = await startFakeWhoop({
 			profile: {
