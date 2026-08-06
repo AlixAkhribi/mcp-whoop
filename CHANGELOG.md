@@ -1,3 +1,19 @@
+# [0.3.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.2.0...v0.3.0) (2026-08-06)
+
+
+### Bug Fixes
+
+* bound and sanitize every WHOOP request ([d944cb8](https://github.com/AlixAkhribi/mcp-whoop/commit/d944cb88b5e8c58d4601b4813db4ff38d7895508))
+* refresh an expired login before revoking it ([4f4f97e](https://github.com/AlixAkhribi/mcp-whoop/commit/4f4f97ef13b6f566c719aebf8572bc70f4da4d8f))
+
+
+### Features
+
+* declare every tool read-only and refuse unknown arguments ([b5dad83](https://github.com/AlixAkhribi/mcp-whoop/commit/b5dad8349d1c7069b5595c002235637ad79e0da0))
+* pin the tools/list order and cache hints ([432c749](https://github.com/AlixAkhribi/mcp-whoop/commit/432c749b90ae8a6778a1c7684c09d0d7bfcde781))
+* read WHOOP cycles, recoveries, sleeps and workouts ([e70f50f](https://github.com/AlixAkhribi/mcp-whoop/commit/e70f50f39e2d23f6ec00bb60f759269bec7d8eff))
+* summarize sleep, recovery and today in one call ([dcd07b8](https://github.com/AlixAkhribi/mcp-whoop/commit/dcd07b82ed1866ac926f96f53312850a712f5561))
+
 # [0.2.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.1.0...v0.2.0) (2026-08-05)
 
 
