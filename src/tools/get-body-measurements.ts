@@ -7,14 +7,16 @@ import {
 } from "@/api/data/body-measurements";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
 import { redactingErrors } from "@/lib/redaction";
+import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { requireStoredLogin } from "./stored-login";
 
 /**
  * No input: whose measurements are read follows from the stored login. Spelled
- * as an empty `z.object(...)` so clients still see a well-formed object schema
- * in `tools/list`.
+ * as an empty `z.strictObject(...)` so clients see a well-formed object schema
+ * in `tools/list` that takes no properties at all, and an argument sent anyway
+ * is refused rather than quietly dropped.
  */
-const getBodyMeasurementsInputSchema = z.object({});
+const getBodyMeasurementsInputSchema = z.strictObject({});
 
 /** Registers the `get_body_measurements` tool on a server instance. */
 export function registerGetBodyMeasurementsTool(server: McpServer): void {
@@ -26,6 +28,7 @@ export function registerGetBodyMeasurementsTool(server: McpServer): void {
 				"Reads the WHOOP body measurements (height, weight, max heart rate) of the user this server is logged in as.",
 			inputSchema: getBodyMeasurementsInputSchema,
 			outputSchema: bodyMeasurementSchema,
+			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
 		redactingErrors(async () => {
 			const tokens = await requireStoredLogin();
