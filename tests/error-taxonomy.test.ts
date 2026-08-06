@@ -88,6 +88,19 @@ async function startFakeWhoop(answers: {
 	return { baseUrl: await listenOnLoopback(server) };
 }
 
+/**
+ * A stand-in WHOOP that accepts the request and then never answers it: no
+ * status line, no body, the socket simply left open — the black hole a request
+ * has to give up on by itself.
+ */
+async function startSilentWhoop(): Promise<{ baseUrl: string }> {
+	const server = createServer((request) => {
+		request.resume();
+	});
+
+	return { baseUrl: await listenOnLoopback(server) };
+}
+
 /** A base URL whose port was just released, so nothing answers on it. */
 async function closedPortBaseUrl(): Promise<string> {
 	const server = createServer();
@@ -125,9 +138,12 @@ async function seedLogin(
  * Calls one tool on the built server over real stdio — a separate process,
  * exactly what an MCP host spawns — and reduces the two shapes a failure can
  * take to one record, so a case can assert on the failure text alone.
+ *
+ * `httpTimeoutMs` turns the bound on WHOOP requests down to something a case
+ * can wait out; left off, the server keeps its own.
  */
 async function callTool(
-	env: { store: string; whoopBaseUrl: string },
+	env: { store: string; whoopBaseUrl: string; httpTimeoutMs?: number },
 	name: string,
 ): Promise<{ failed: boolean; text: string }> {
 	const client = new Client({ name: "error-taxonomy-test", version: "0.0.0" });
@@ -140,6 +156,9 @@ async function callTool(
 			WHOOP_API_BASE_URL: env.whoopBaseUrl,
 			WHOOP_CLIENT_ID: "a-client-id",
 			WHOOP_CLIENT_SECRET: "a-client-secret",
+			...(env.httpTimeoutMs === undefined
+				? {}
+				: { WHOOP_HTTP_TIMEOUT_MS: String(env.httpTimeoutMs) }),
 		},
 	});
 
@@ -181,6 +200,53 @@ describe("the error taxonomy at the tool boundary, over real stdio", () => {
 		expect(outcome.text).toContain("30 seconds");
 	}, 30_000);
 
+	it("names the wait from X-RateLimit-Reset when WHOOP sends no Retry-After", async () => {
+		const whoop = await startFakeWhoop({
+			profile: {
+				status: 429,
+				body: { error: "too_many_requests" },
+				// The header WHOOP's own rate-limiting documentation names, in the
+				// same seconds Retry-After would be counted in — and the only one
+				// WHOOP is documented to send.
+				headers: { "x-ratelimit-reset": "30" },
+			},
+		});
+		const store = await temporaryStore();
+		await seedLogin(store, { expired: false });
+
+		const outcome = await callTool(
+			{ store, whoopBaseUrl: whoop.baseUrl },
+			"get_profile",
+		);
+
+		expect(outcome.failed).toBe(true);
+		expect(outcome.text).toMatch(/rate-limited/i);
+		expect(outcome.text).toMatch(/safe to retry/i);
+		expect(outcome.text).toContain("30 seconds");
+	}, 30_000);
+
+	it("takes Retry-After over X-RateLimit-Reset when WHOOP sends both", async () => {
+		const whoop = await startFakeWhoop({
+			profile: {
+				status: 429,
+				body: { error: "too_many_requests" },
+				headers: { "retry-after": "30", "x-ratelimit-reset": "90" },
+			},
+		});
+		const store = await temporaryStore();
+		await seedLogin(store, { expired: false });
+
+		const outcome = await callTool(
+			{ store, whoopBaseUrl: whoop.baseUrl },
+			"get_profile",
+		);
+
+		expect(outcome.failed).toBe(true);
+		// The HTTP standard header is the one to obey when it is there at all.
+		expect(outcome.text).toContain("30 seconds");
+		expect(outcome.text).not.toContain("90");
+	}, 30_000);
+
 	it("marks a 503 as retryable, naming a temporary WHOOP outage", async () => {
 		const whoop = await startFakeWhoop({
 			profile: { status: 503, body: { error: "service_unavailable" } },
@@ -211,6 +277,27 @@ describe("the error taxonomy at the tool boundary, over real stdio", () => {
 		expect(outcome.failed).toBe(true);
 		expect(outcome.text).toMatch(/network/i);
 		expect(outcome.text).toMatch(/safe to retry/i);
+	}, 30_000);
+
+	it("gives up on a WHOOP that never answers, as the same retryable failure", async () => {
+		const whoop = await startSilentWhoop();
+		const store = await temporaryStore();
+		await seedLogin(store, { expired: false });
+
+		const startedAt = Date.now();
+		const outcome = await callTool(
+			{ store, whoopBaseUrl: whoop.baseUrl, httpTimeoutMs: 1_000 },
+			"get_profile",
+		);
+
+		expect(outcome.failed).toBe(true);
+		// An abandoned request is a request WHOOP never answered, said in the same
+		// words a refused connection gets.
+		expect(outcome.text).toMatch(/network/i);
+		expect(outcome.text).toMatch(/safe to retry/i);
+		// The point of the bound: unbounded, this call would sit here for the
+		// minutes Node's own defaults allow.
+		expect(Date.now() - startedAt).toBeLessThan(15_000);
 	}, 30_000);
 
 	it("marks a 400 as fatal, carrying WHOOP's own message", async () => {

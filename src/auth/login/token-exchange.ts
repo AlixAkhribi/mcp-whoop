@@ -5,13 +5,14 @@ import {
 	storedTokensFromResponse,
 } from "@/api/oauth/token-response";
 import type { StoredTokens } from "@/auth/tokens/store";
-import { registerSecrets } from "@/lib/redaction";
+import { redactedExcerpt, registerSecrets } from "@/lib/redaction";
 import type { WhoopAppCredentials } from "./environment";
 
 /**
  * A rejected exchange, phrased so the user can act on it. WHOOP's own OAuth
  * error is the whole diagnosis — an expired code, a redirect URI that does not
- * match what was registered — so it is passed through rather than summarised.
+ * match what was registered — so it is passed through rather than summarised,
+ * as an excerpt: WHOOP writes the words, and they are printed as they are.
  */
 function rejection(status: number, payload: unknown): string {
 	const failure = oauthErrorSchema.safeParse(payload);
@@ -20,8 +21,9 @@ function rejection(status: number, payload: unknown): string {
 	}
 
 	const { error, error_description: description } = failure.data;
+	const said = description ? `: ${redactedExcerpt(description)}` : "";
 
-	return `the token exchange failed (${error}${description ? `: ${description}` : ""})`;
+	return `the token exchange failed (${redactedExcerpt(error)}${said})`;
 }
 
 /** What the login command has to hand to trade a code for tokens. */

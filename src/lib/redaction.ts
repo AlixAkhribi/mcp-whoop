@@ -36,6 +36,27 @@ export function redactSecrets(text: string): string {
 	return scrubbed;
 }
 
+/** How much of a message written outside this process may be quoted onward. */
+const EXCERPT_LIMIT = 300;
+
+/**
+ * Text from outside this process, made safe to quote: scrubbed of every
+ * registered secret first, and only then cut to {@link EXCERPT_LIMIT}
+ * characters, with an ellipsis when there was more to say.
+ *
+ * The order is the whole point. Cutting first could fall inside a secret and
+ * leave a usable prefix behind, which exact-substring matching would no longer
+ * recognise as anything to scrub; cutting text that is already scrubbed can
+ * only ever yield more scrubbed text.
+ */
+export function redactedExcerpt(text: string): string {
+	const scrubbed = redactSecrets(text);
+
+	return scrubbed.length > EXCERPT_LIMIT
+		? `${scrubbed.slice(0, EXCERPT_LIMIT)}…`
+		: scrubbed;
+}
+
 /** An error's message, scrubbed, safe for an outward surface to carry. */
 export function describeRedacted(error: unknown): string {
 	return redactSecrets(error instanceof Error ? error.message : String(error));
