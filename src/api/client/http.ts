@@ -12,18 +12,32 @@ import { redactedExcerpt } from "@/lib/redaction";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
+ * The longest bound a request can be given: Node's timer ceiling, 2^31 - 1
+ * milliseconds. `AbortSignal.timeout` honors no delay outside 1..here —
+ * fractions and anything past 2^32 - 1 throw, and the band between the two
+ * ceilings quietly becomes a 1 ms timer — so the startup gate
+ * (`src/config/environment.ts`) and {@link whoopRequestTimeoutMs} accept
+ * exactly the whole milliseconds this bound allows.
+ */
+export const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/**
  * The bound every WHOOP request is given, in milliseconds.
  * `WHOOP_HTTP_TIMEOUT_MS` moves it — the same kind of environment seam
  * `WHOOP_API_BASE_URL` gives the origin (`src/api/client/endpoints.ts`), here so
- * a test can ask for a bound it can wait out. Anything but a positive, finite
- * number of milliseconds leaves the default standing.
+ * a test can ask for a bound it can wait out. Anything but a whole number of
+ * milliseconds in {@link MAX_TIMEOUT_MS}'s range leaves the default standing —
+ * a state only a test can hand it, since startup refuses a malformed value
+ * (`src/config/environment.ts`) before any request is made.
  */
 export function whoopRequestTimeoutMs(
 	env: NodeJS.ProcessEnv = process.env,
 ): number {
 	const configured = Number(env.WHOOP_HTTP_TIMEOUT_MS);
 
-	return Number.isFinite(configured) && configured > 0
+	return Number.isInteger(configured) &&
+		configured >= 1 &&
+		configured <= MAX_TIMEOUT_MS
 		? configured
 		: DEFAULT_TIMEOUT_MS;
 }
