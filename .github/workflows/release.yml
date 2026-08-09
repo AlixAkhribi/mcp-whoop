@@ -29,7 +29,10 @@ permissions:
   # The same token is what signs the provenance attestation that puts "Built and
   # signed on GitHub Actions" on the npm page. OIDC publishes attest by default;
   # `publishConfig.provenance` in package.json is what earns the badge on the
-  # one bootstrap publish below, which still authenticates with a token.
+  # one bootstrap publish below, which still authenticates with a token. Its
+  # `access: "public"` sits beside it because npm refuses to attest a package
+  # the registry has never seen — which `mcp-whoop` is, having been unpublished
+  # — until the access it would default to anyway is stated outright.
   id-token: write
 
 jobs:
