@@ -37,7 +37,7 @@ Or add it to an MCP client's configuration — no environment variables needed, 
 }
 ```
 
-Two further variables exist for tests and local development rather than everyday use: `WHOOP_HTTP_TIMEOUT_MS` moves the thirty-second bound every WHOOP request is given, and `WHOOP_API_BASE_URL` points the client at an origin other than WHOOP's own. Anything but a positive, finite number of milliseconds leaves the bound where it was.
+Two further variables exist for tests and local development rather than everyday use: `WHOOP_HTTP_TIMEOUT_MS` moves the thirty-second bound every WHOOP request is given, and `WHOOP_API_BASE_URL` points the client at an origin other than WHOOP's own. Every `WHOOP_*` variable is validated at startup: none is required, but a value that does not parse — a timeout that is not a whole number of milliseconds Node's timers can honor, a URL that is not an origin, a scope this server cannot ask WHOOP for — stops the process with a checklist naming what to fix, and a `WHOOP_*` name the server does not read is called out on stderr as a likely typo.
 
 ### Tools
 
@@ -106,6 +106,8 @@ pnpm test         # builds dist/ and runs the suite against the built artifact
 pnpm inspect      # MCP Inspector (web UI) against the TypeScript source
 pnpm inspect:cli  # MCP Inspector (CLI) against the TypeScript source
 ```
+
+Login credentials for local development can live in a `.env` file: copy `.env.example`, fill it in (`.env` is git-ignored), and let Node load it natively — `node --env-file=.env dist/index.js login`. No dotenv is involved: under `stdio`, stdout is the protocol wire, and dotenv greets it with a banner by default.
 
 Quality gates (typecheck, Biome, tests, commit convention) run from git hooks locally and again in CI; see `.github/workflows/`. Releases are cut automatically by semantic-release when Conventional Commits merge to `main` — nobody bumps a version by hand.
 
