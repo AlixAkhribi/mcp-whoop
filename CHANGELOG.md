@@ -1,3 +1,15 @@
+# [0.4.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.3.0...v0.4.0) (2026-08-09)
+
+
+### Bug Fixes
+
+* reject timeouts Node's timers cannot honor ([b9405d1](https://github.com/AlixAkhribi/mcp-whoop/commit/b9405d155bbd96ffd602b9973fc34ed9846cf0f0))
+
+
+### Features
+
+* validate the WHOOP_* environment at startup ([a6759a0](https://github.com/AlixAkhribi/mcp-whoop/commit/a6759a0c9b054a710c52f6a303db4ff651647835))
+
 # [0.3.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.2.0...v0.3.0) (2026-08-06)
 
 
