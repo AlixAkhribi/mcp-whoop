@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { fetchSleep, sleepSchema } from "@/api/data/sleeps";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -29,7 +29,7 @@ export function registerGetSleepTool(server: McpServer): void {
 			outputSchema: sleepSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async ({ sleepId }) => {
+		observedTool("get_sleep", async ({ sleepId }) => {
 			const tokens = await requireStoredLogin();
 
 			const sleep = await withValidAccessToken(tokens, (accessToken) =>

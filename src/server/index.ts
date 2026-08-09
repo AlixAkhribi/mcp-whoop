@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { grantedScopes } from "@/auth/tokens/granted-scopes";
+import { log } from "@/lib/log";
 import { registerTools } from "@/tools";
 
 /** The manifest fields this server reports as its MCP identity. */
@@ -35,9 +36,10 @@ function manifestPath(): string {
  * The published identity this server reports over MCP, read from the manifest
  * rather than duplicated here: the package name differs from the repository
  * name, and the version is rewritten at release time, so `package.json` is the
- * only place either can be correct.
+ * only place either can be correct. Exported so the stdio entry can announce
+ * on stderr what exactly is serving.
  */
-const manifest = manifestSchema.parse(
+export const manifest = manifestSchema.parse(
 	JSON.parse(readFileSync(manifestPath(), "utf8")),
 );
 
@@ -74,7 +76,16 @@ export async function createServer(): Promise<McpServer> {
 			},
 		},
 	);
-	registerTools(server, await grantedScopes());
+	const scopes = await grantedScopes();
+	// The one line that answers "why is a tool missing": the surface is a
+	// function of the stored grant, and nothing else says which grant this
+	// serving unit read.
+	log.debug(
+		scopes
+			? `serving the tools these granted scopes allow: ${scopes.join(", ")}`
+			: "serving every tool: no stored login records a grant to narrow by",
+	);
+	registerTools(server, scopes);
 
 	return server;
 }

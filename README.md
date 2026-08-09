@@ -39,6 +39,8 @@ Or add it to an MCP client's configuration — no environment variables needed, 
 
 Two further variables exist for tests and local development rather than everyday use: `WHOOP_HTTP_TIMEOUT_MS` moves the thirty-second bound every WHOOP request is given, and `WHOOP_API_BASE_URL` points the client at an origin other than WHOOP's own. Every `WHOOP_*` variable is validated at startup: none is required, but a value that does not parse — a timeout that is not a whole number of milliseconds Node's timers can honor, a URL that is not an origin, a scope this server cannot ask WHOOP for — stops the process with a checklist naming what to fix, and a `WHOOP_*` name the server does not read is called out on stderr as a likely typo.
 
+Diagnostics go to stderr, never stdout — under `stdio`, stdout is the JSON-RPC wire, and stderr is the stream the MCP stdio transport reserves for logging. MCP hosts capture the stream into their own log files. `WHOOP_LOG_LEVEL` sets how much lands there — `debug`, `info` (the default), `warning`, or `error` — and every line is scrubbed of token material before it is written.
+
 ### Tools
 
 The login records which scopes WHOOP granted, and the granted set is authoritative for the server's shape: only tools whose scope was granted are served, so a connected model never sees a tool WHOOP would deny. All six read scopes are requested by default; set `WHOOP_SCOPES` at login to ask for less.

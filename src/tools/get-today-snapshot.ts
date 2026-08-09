@@ -5,9 +5,9 @@ import { fetchCyclePage, type WhoopCycle } from "@/api/data/cycles";
 import { fetchCycleRecoveryOrAbsent } from "@/api/data/recoveries";
 import { fetchCycleSleepOrAbsent } from "@/api/data/sleeps";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { snapshotOfToday, todaySnapshotSchema } from "@/summaries/snapshot";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -49,7 +49,7 @@ export function registerGetTodaySnapshotTool(server: McpServer): void {
 			outputSchema: todaySnapshotSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async () => {
+		observedTool("get_today_snapshot", async () => {
 			const tokens = await requireStoredLogin();
 
 			const snapshot = await withValidAccessToken(

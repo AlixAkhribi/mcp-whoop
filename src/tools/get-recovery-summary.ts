@@ -4,12 +4,12 @@ import { z } from "zod";
 import { fetchCyclePage, type WhoopCycle } from "@/api/data/cycles";
 import { fetchRecoveryPage, type WhoopRecovery } from "@/api/data/recoveries";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import {
 	recoverySummarySchema,
 	summarizeRecoveries,
 } from "@/summaries/recovery";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /** A week, the span the question "how is my recovery lately" usually means. */
@@ -116,7 +116,7 @@ export function registerGetRecoverySummaryTool(server: McpServer): void {
 			outputSchema: recoverySummarySchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async ({ days }) => {
+		observedTool("get_recovery_summary", async ({ days }) => {
 			const tokens = await requireStoredLogin();
 
 			const summary = await withValidAccessToken(

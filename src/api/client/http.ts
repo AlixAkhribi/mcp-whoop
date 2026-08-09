@@ -6,7 +6,8 @@
  * them as control flow rather than failures to relay.
  */
 
-import { redactedExcerpt } from "@/lib/redaction";
+import { log } from "@/lib/log";
+import { describeRedacted, redactedExcerpt } from "@/lib/redaction";
 
 /** How long a WHOOP request may go unanswered before it is abandoned. */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -53,22 +54,38 @@ export function whoopRequestTimeoutMs(
  * request's only `signal`: a caller handing one in has it replaced, so a caller
  * that needs to abort a WHOOP request for reasons of its own has to be given a
  * seam here rather than passing one through.
+ *
+ * Every request also lands one stderr line — the answered status at `debug`,
+ * no answer at all at `warning`. The line names the method and path alone:
+ * query values, headers and bodies describe the user and their credentials,
+ * and belong in no log.
  */
 export async function whoopFetch(
 	what: string,
 	url: URL,
 	init?: RequestInit,
 ): Promise<Response> {
+	const method = init?.method ?? "GET";
+	const started = performance.now();
+	let response: Response;
 	try {
-		return await fetch(url, {
+		response = await fetch(url, {
 			...init,
 			signal: AbortSignal.timeout(whoopRequestTimeoutMs()),
 		});
-	} catch {
+	} catch (cause) {
+		log.warning(
+			`${method} ${url.pathname} got no answer for ${what}: ${describeRedacted(cause)}`,
+		);
 		throw new Error(
 			`WHOOP could not be reached for ${what}: a network failure, not a WHOOP answer. It is safe to retry once the connection is back.`,
 		);
 	}
+	log.debug(
+		`${method} ${url.pathname} answered ${response.status} for ${what} in ${Math.round(performance.now() - started)}ms`,
+	);
+
+	return response;
 }
 
 /**

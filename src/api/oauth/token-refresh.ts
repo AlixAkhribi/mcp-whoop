@@ -5,6 +5,7 @@ import {
 	whoopFetch,
 } from "@/api/client/http";
 import type { StoredApplication, StoredTokens } from "@/auth/tokens/store";
+import { log } from "@/lib/log";
 import { registerSecrets } from "@/lib/redaction";
 import {
 	oauthErrorSchema,
@@ -70,6 +71,7 @@ export async function refreshTokens(
 	// The client secret enters the serving process here, from either source.
 	registerSecrets(application.clientSecret);
 
+	log.debug("asking WHOOP to refresh the access token");
 	const response = await whoopFetch("the token refresh", tokenEndpoint(env), {
 		method: "POST",
 		headers: {
@@ -113,5 +115,15 @@ export async function refreshTokens(
 		throw classifiedWhoopFailure("the token refresh", response, body);
 	}
 
-	return { ...storedTokensFromResponse(payload, stored.scopes), application };
+	const rotated: StoredTokens = {
+		...storedTokensFromResponse(payload, stored.scopes),
+		application,
+	};
+	// Refreshes are rare and load-bearing — a dead login shows up here first —
+	// so the success is worth a default-visible line, told only once the 200
+	// body has proved to hold tokens: a false success would point a reader
+	// away from the real failure.
+	log.info("the WHOOP access token was refreshed; a rotated pair replaces it");
+
+	return rotated;
 }
