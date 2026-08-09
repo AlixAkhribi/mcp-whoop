@@ -23,22 +23,64 @@ const USAGE = [
 	"  logout  Revoke this server's WHOOP access and forget the stored login",
 ].join("\n");
 
-switch (command) {
-	case "stdio":
-		await import("@/transports/stdio");
-		break;
-	case "login": {
-		const { runLogin } = await import("@/auth/login");
-		process.exitCode = await runLogin();
-		break;
-	}
-	case "logout": {
-		const { runLogout } = await import("@/auth/logout");
-		process.exitCode = await runLogout();
-		break;
-	}
-	default:
+/** The commands this binary answers to. */
+const COMMANDS = new Set(["stdio", "login", "logout"]);
+
+/**
+ * Refusals set `process.exitCode` and return rather than calling
+ * `process.exit`, which can outrun its own diagnostic: writes to a piped
+ * stderr are asynchronous on Windows, and an MCP client reads this server
+ * through pipes. With nothing else scheduled, the process exits on its own
+ * once the report has flushed.
+ */
+async function run(): Promise<void> {
+	if (!COMMANDS.has(command)) {
 		console.error(`Unknown command: ${command}`);
 		console.error(USAGE);
-		process.exit(1);
+		process.exitCode = 1;
+
+		return;
+	}
+
+	// The environment gate sits between the command check and the dispatch: a
+	// mistyped command is an invocation mistake and reads as usage, but a value
+	// the environment misdescribes must stop every command the same way, before
+	// any of them acts on it. Both reports go to stderr — under `stdio`, stdout
+	// belongs to the protocol from the first byte.
+	const { environmentProblems, environmentWarnings } = await import(
+		"@/config/environment"
+	);
+
+	const problems = environmentProblems(process.env);
+
+	if (problems) {
+		console.error(problems);
+		process.exitCode = 1;
+
+		return;
+	}
+
+	const warnings = environmentWarnings(process.env);
+
+	if (warnings) {
+		console.error(warnings);
+	}
+
+	switch (command) {
+		case "stdio":
+			await import("@/transports/stdio");
+			break;
+		case "login": {
+			const { runLogin } = await import("@/auth/login");
+			process.exitCode = await runLogin();
+			break;
+		}
+		case "logout": {
+			const { runLogout } = await import("@/auth/logout");
+			process.exitCode = await runLogout();
+			break;
+		}
+	}
 }
+
+await run();
