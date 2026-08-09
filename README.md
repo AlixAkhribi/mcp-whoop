@@ -113,6 +113,8 @@ Login credentials for local development can live in a `.env` file: copy `.env.ex
 
 Quality gates (typecheck, Biome, tests, commit convention) run from git hooks locally and again in CI; see `.github/workflows/`. Releases are cut automatically by semantic-release when Conventional Commits merge to `main` — nobody bumps a version by hand.
 
+Publishing goes through [npm trusted publishing](https://docs.npmjs.com/trusted-publishers): `.github/workflows/release.yml` mints a short-lived OIDC token and trades it with the registry, so there is no long-lived npm credential to leak or rotate. Every published version carries a [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) linking the tarball back to the commit and workflow run that built it — the "Built and signed on GitHub Actions" line on the npm page.
+
 ## License
 
 [MIT](LICENSE)
