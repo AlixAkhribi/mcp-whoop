@@ -15,20 +15,24 @@ function completeEnvironment(
 		WHOOP_REDIRECT_URI: "http://127.0.0.1:8788/callback",
 		WHOOP_API_BASE_URL: "https://api.prod.whoop.com",
 		WHOOP_HTTP_TIMEOUT_MS: "30000",
+		WHOOP_LOG_LEVEL: "info",
 		WHOOP_TOKEN_STORE: "somewhere/else",
 		WHOOP_SCOPES: "read:profile, read:sleep offline",
 		...overrides,
 	};
 }
 
+// `login` is the widest surface — it reads every variable in the schema — so
+// this block asks the gate about `login` to exercise the whole of it. Which
+// command reads what is the subject of its own block below.
 describe("the environment gate", () => {
 	it("accepts an environment saying nothing at all", () => {
 		// Serving runs on the stored login alone, so absence is never a problem.
-		expect(environmentProblems({})).toBeUndefined();
+		expect(environmentProblems({}, "login")).toBeUndefined();
 	});
 
 	it("accepts a complete, well-formed environment", () => {
-		expect(environmentProblems(completeEnvironment())).toBeUndefined();
+		expect(environmentProblems(completeEnvironment(), "login")).toBeUndefined();
 	});
 
 	it("treats blank as unset rather than malformed", () => {
@@ -37,9 +41,11 @@ describe("the environment gate", () => {
 				completeEnvironment({
 					WHOOP_API_BASE_URL: "   ",
 					WHOOP_HTTP_TIMEOUT_MS: "",
+					WHOOP_LOG_LEVEL: " ",
 					WHOOP_REDIRECT_URI: "\t",
 					WHOOP_SCOPES: " ",
 				}),
+				"login",
 			),
 		).toBeUndefined();
 	});
@@ -47,6 +53,7 @@ describe("the environment gate", () => {
 	it("rejects a redirect URI that is not a URL", () => {
 		const problems = environmentProblems(
 			completeEnvironment({ WHOOP_REDIRECT_URI: "not a url" }),
+			"login",
 		);
 
 		expect(problems).toContain("WHOOP_REDIRECT_URI");
@@ -55,7 +62,10 @@ describe("the environment gate", () => {
 	it("rejects a base URL that is not http(s)", () => {
 		for (const value of ["api.prod.whoop.com", "ftp://api.prod.whoop.com"]) {
 			expect(
-				environmentProblems(completeEnvironment({ WHOOP_API_BASE_URL: value })),
+				environmentProblems(
+					completeEnvironment({ WHOOP_API_BASE_URL: value }),
+					"login",
+				),
 			).toContain("WHOOP_API_BASE_URL");
 		}
 	});
@@ -67,7 +77,10 @@ describe("the environment gate", () => {
 			"http://localhost:8080/whoop",
 		]) {
 			expect(
-				environmentProblems(completeEnvironment({ WHOOP_API_BASE_URL: value })),
+				environmentProblems(
+					completeEnvironment({ WHOOP_API_BASE_URL: value }),
+					"login",
+				),
 			).toBeUndefined();
 		}
 	});
@@ -82,7 +95,10 @@ describe("the environment gate", () => {
 			"https://example.com?",
 		]) {
 			expect(
-				environmentProblems(completeEnvironment({ WHOOP_API_BASE_URL: value })),
+				environmentProblems(
+					completeEnvironment({ WHOOP_API_BASE_URL: value }),
+					"login",
+				),
 			).toContain("WHOOP_API_BASE_URL");
 		}
 	});
@@ -105,6 +121,7 @@ describe("the environment gate", () => {
 			expect(
 				environmentProblems(
 					completeEnvironment({ WHOOP_HTTP_TIMEOUT_MS: value }),
+					"login",
 				),
 			).toContain("WHOOP_HTTP_TIMEOUT_MS");
 		}
@@ -115,14 +132,37 @@ describe("the environment gate", () => {
 			expect(
 				environmentProblems(
 					completeEnvironment({ WHOOP_HTTP_TIMEOUT_MS: value }),
+					"login",
 				),
 			).toBeUndefined();
 		}
 	});
 
+	it("accepts every level the logger speaks", () => {
+		for (const level of ["debug", "info", "warning", "error"]) {
+			expect(
+				environmentProblems(
+					completeEnvironment({ WHOOP_LOG_LEVEL: level }),
+					"login",
+				),
+			).toBeUndefined();
+		}
+	});
+
+	it("rejects a log level the logger does not speak, listing the real ones", () => {
+		const problems = environmentProblems(
+			completeEnvironment({ WHOOP_LOG_LEVEL: "verbose" }),
+			"login",
+		);
+
+		expect(problems).toContain("WHOOP_LOG_LEVEL");
+		expect(problems).toContain("debug, info, warning, error");
+	});
+
 	it("rejects scopes this server cannot ask for, without echoing them", () => {
 		const problems = environmentProblems(
 			completeEnvironment({ WHOOP_SCOPES: "read:sleep read:sleeep" }),
+			"login",
 		);
 
 		expect(problems).toContain("WHOOP_SCOPES");
@@ -144,6 +184,7 @@ describe("the environment gate", () => {
 		]) {
 			const problems = environmentProblems(
 				completeEnvironment({ WHOOP_SCOPES: `read:sleep ${pasted}` }),
+				"login",
 			);
 
 			expect(problems).toContain("WHOOP_SCOPES");
@@ -154,7 +195,7 @@ describe("the environment gate", () => {
 
 	it("rejects a scope list that names nothing", () => {
 		expect(
-			environmentProblems(completeEnvironment({ WHOOP_SCOPES: ",," })),
+			environmentProblems(completeEnvironment({ WHOOP_SCOPES: ",," }), "login"),
 		).toContain("WHOOP_SCOPES");
 	});
 
@@ -164,6 +205,7 @@ describe("the environment gate", () => {
 				WHOOP_API_BASE_URL: "nowhere",
 				WHOOP_HTTP_TIMEOUT_MS: "soon",
 			}),
+			"login",
 		);
 
 		expect(problems).toContain("WHOOP_API_BASE_URL");
@@ -176,6 +218,7 @@ describe("the environment gate", () => {
 				WHOOP_CLIENT_SECRET: "s3cr3t-value",
 				WHOOP_HTTP_TIMEOUT_MS: "soon",
 			}),
+			"login",
 		);
 
 		expect(problems).toBeDefined();
@@ -183,18 +226,113 @@ describe("the environment gate", () => {
 	});
 });
 
+/**
+ * The read surfaces, pinned. Read sets drift as commands gain and lose
+ * variables, and the cost of missing that drift is the silent-ignore failure
+ * this gate exists to prevent, so each side of the split is asserted rather
+ * than left to the schema's shape.
+ */
+describe("the per-command surface", () => {
+	const LOGIN_ONLY = {
+		WHOOP_REDIRECT_URI: "not a url",
+		WHOOP_SCOPES: "read:sleep read:sleeep",
+	};
+
+	it("does not stop serving or logout over a login-only variable", () => {
+		// Serving never reads either one: an MCP host reports a server that
+		// exits as failed, so a typo here would cost every tool for nothing.
+		for (const command of ["stdio", "logout"] as const) {
+			expect(
+				environmentProblems(completeEnvironment(LOGIN_ONLY), command),
+			).toBeUndefined();
+		}
+	});
+
+	it("refuses login over the same values", () => {
+		const problems = environmentProblems(
+			completeEnvironment(LOGIN_ONLY),
+			"login",
+		);
+
+		expect(problems).toContain("WHOOP_REDIRECT_URI");
+		expect(problems).toContain("WHOOP_SCOPES");
+	});
+
+	it("still stops every command over a variable they all read", () => {
+		for (const command of ["stdio", "login", "logout"] as const) {
+			expect(
+				environmentProblems(
+					completeEnvironment({ WHOOP_HTTP_TIMEOUT_MS: "soon" }),
+					command,
+				),
+			).toContain("WHOOP_HTTP_TIMEOUT_MS");
+		}
+	});
+
+	it("reports a login-only problem to the other commands as a warning", () => {
+		// Not stopped by it, but not silently swallowing it either: the same
+		// checklist line, said where it costs nothing.
+		const warnings = environmentWarnings(
+			completeEnvironment({ WHOOP_REDIRECT_URI: "not a url" }),
+			"stdio",
+		);
+
+		expect(warnings).toContain("WHOOP_REDIRECT_URI");
+		expect(warnings).toContain("only `login` reads it");
+		expect(warnings).toContain("must be the URL WHOOP sends the browser back");
+	});
+
+	it("leaves that warning to the refusal when login is what is running", () => {
+		expect(
+			environmentWarnings(
+				completeEnvironment({ WHOOP_REDIRECT_URI: "not a url" }),
+				"login",
+			),
+		).toBeUndefined();
+	});
+
+	it("never echoes a value in the demoted warning either", () => {
+		const warnings = environmentWarnings(
+			completeEnvironment({ WHOOP_SCOPES: "read:sleep S3cr3t-Va1ue-9000" }),
+			"stdio",
+		);
+
+		expect(warnings).toContain("WHOOP_SCOPES");
+		expect(warnings).not.toContain("S3cr3t-Va1ue-9000");
+	});
+});
+
 describe("the environment typo warning", () => {
 	it("calls out WHOOP_ names this server does not read", () => {
 		const warnings = environmentWarnings(
 			completeEnvironment({ WHOOP_TIMEOUT_MS: "5000" }),
+			"stdio",
 		);
 
 		expect(warnings).toContain("WHOOP_TIMEOUT_MS");
 	});
 
 	it("stays silent for the names it reads and for foreign variables", () => {
-		expect(
-			environmentWarnings({ ...completeEnvironment(), PATH: "/usr/bin" }),
-		).toBeUndefined();
+		for (const command of ["stdio", "login", "logout"] as const) {
+			expect(
+				environmentWarnings(
+					{ ...completeEnvironment(), PATH: "/usr/bin" },
+					command,
+				),
+			).toBeUndefined();
+		}
+	});
+
+	it("says both things at once when both are true", () => {
+		const warnings = environmentWarnings(
+			completeEnvironment({
+				WHOOP_TIMEOUT_MS: "5000",
+				WHOOP_REDIRECT_URI: "not a url",
+			}),
+			"stdio",
+		);
+
+		expect(warnings).toContain("WHOOP_TIMEOUT_MS");
+		expect(warnings).toContain("WHOOP_REDIRECT_URI");
 	});
 });
