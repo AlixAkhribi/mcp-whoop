@@ -24,6 +24,9 @@
 	"files": [
 		"dist"
 	],
+	"publishConfig": {
+		"provenance": true
+	},
 	"scripts": {
 		"prepare": "husky || true",
 		"build": "tsdown",

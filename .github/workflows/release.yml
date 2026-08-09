@@ -21,10 +21,15 @@ permissions:
   issues: write
   pull-requests: write
   # The entire npm authentication story: the job mints a short-lived OIDC token
-  # and trades it with the registry for publish rights on `mcp-whoop`. There is
-  # deliberately no NPM_TOKEN secret in this repository — nothing long-lived to
-  # leak or rotate — and npm attaches a provenance attestation to OIDC publishes
-  # automatically.
+  # and trades it with the registry for publish rights on `mcp-whoop`. The
+  # trusted publisher configured on npmjs.com names this file — `release.yml`,
+  # case-sensitive, extension included — so renaming it revokes publish rights
+  # until the registry side is updated to match.
+  #
+  # The same token is what signs the provenance attestation that puts "Built and
+  # signed on GitHub Actions" on the npm page. OIDC publishes attest by default;
+  # `publishConfig.provenance` in package.json is what earns the badge on the
+  # one bootstrap publish below, which still authenticates with a token.
   id-token: write
 
 jobs:
@@ -54,6 +59,15 @@ jobs:
           # semantic-release 25's own `^22.14.0 || >=24.10.0`.
           node-version: 22.22.1
           cache: pnpm
+
+      # `@semantic-release/npm` shells out to whatever `npm` is on PATH, and the
+      # one bundled with Node 22.22.1 is 10.9.4 — old enough to publish, but too
+      # old to trade this job's OIDC token for publish rights, which needs
+      # 11.5.1. Upgrading the CLI rather than the runtime keeps the pin above
+      # meaningful: the build still has to work on the oldest Node the package
+      # claims to support.
+      - name: Use an npm that can publish over OIDC
+        run: npm install --global npm@11
 
       - run: pnpm install --frozen-lockfile
 
