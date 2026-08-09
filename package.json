@@ -1,6 +1,6 @@
 {
 	"name": "mcp-whoop",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"description": "Model Context Protocol (MCP) server for WHOOP, served over stdio",
 	"keywords": [
 		"mcp",
