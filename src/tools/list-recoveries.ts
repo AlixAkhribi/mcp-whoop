@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { fetchRecoveryPage, recoveryPageSchema } from "@/api/data/recoveries";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -52,7 +52,7 @@ export function registerListRecoveriesTool(server: McpServer): void {
 			outputSchema: recoveryPageSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async (query) => {
+		observedTool("list_recoveries", async (query) => {
 			const tokens = await requireStoredLogin();
 
 			const page = await withValidAccessToken(tokens, (accessToken) =>

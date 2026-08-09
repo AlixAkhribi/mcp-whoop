@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { fetchProfile, profileSchema } from "@/api/data/profile";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -27,7 +27,7 @@ export function registerGetProfileTool(server: McpServer): void {
 			outputSchema: profileSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async () => {
+		observedTool("get_profile", async () => {
 			const tokens = await requireStoredLogin();
 
 			const profile = await withValidAccessToken(tokens, (accessToken) =>

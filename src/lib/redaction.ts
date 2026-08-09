@@ -61,21 +61,3 @@ export function redactedExcerpt(text: string): string {
 export function describeRedacted(error: unknown): string {
 	return redactSecrets(error instanceof Error ? error.message : String(error));
 }
-
-/**
- * Wraps a tool handler so anything it throws carries a redacted message.
- *
- * The MCP SDK puts a thrown error's message on the wire verbatim as the tool
- * error, making this the only seam where a tool's failures can be scrubbed.
- */
-export function redactingErrors<A extends unknown[], R>(
-	handler: (...args: A) => Promise<R>,
-): (...args: A) => Promise<R> {
-	return async (...args) => {
-		try {
-			return await handler(...args);
-		} catch (error) {
-			throw new Error(describeRedacted(error));
-		}
-	};
-}

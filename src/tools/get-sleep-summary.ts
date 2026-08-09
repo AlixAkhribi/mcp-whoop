@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { fetchSleepPage, type WhoopSleep } from "@/api/data/sleeps";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { sleepSummarySchema, summarizeSleeps } from "@/summaries/sleep";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /** A week, the span the question "how did I sleep lately" usually means. */
@@ -83,7 +83,7 @@ export function registerGetSleepSummaryTool(server: McpServer): void {
 			outputSchema: sleepSummarySchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async ({ days }) => {
+		observedTool("get_sleep_summary", async ({ days }) => {
 			const tokens = await requireStoredLogin();
 
 			const sleeps = await withValidAccessToken(tokens, (accessToken) =>

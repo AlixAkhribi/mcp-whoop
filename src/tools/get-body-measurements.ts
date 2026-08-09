@@ -6,8 +6,8 @@ import {
 	fetchBodyMeasurements,
 } from "@/api/data/body-measurements";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -30,7 +30,7 @@ export function registerGetBodyMeasurementsTool(server: McpServer): void {
 			outputSchema: bodyMeasurementSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async () => {
+		observedTool("get_body_measurements", async () => {
 			const tokens = await requireStoredLogin();
 
 			const measurements = await withValidAccessToken(tokens, (accessToken) =>

@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { fetchWorkout, workoutSchema } from "@/api/data/workouts";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -29,7 +29,7 @@ export function registerGetWorkoutTool(server: McpServer): void {
 			outputSchema: workoutSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async ({ workoutId }) => {
+		observedTool("get_workout", async ({ workoutId }) => {
 			const tokens = await requireStoredLogin();
 
 			const workout = await withValidAccessToken(tokens, (accessToken) =>

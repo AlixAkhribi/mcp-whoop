@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { cyclePageSchema, fetchCyclePage } from "@/api/data/cycles";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { redactingErrors } from "@/lib/redaction";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { observedTool } from "./observed";
 import { requireStoredLogin } from "./stored-login";
 
 /**
@@ -52,7 +52,7 @@ export function registerListCyclesTool(server: McpServer): void {
 			outputSchema: cyclePageSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		redactingErrors(async (query) => {
+		observedTool("list_cycles", async (query) => {
 			const tokens = await requireStoredLogin();
 
 			const page = await withValidAccessToken(tokens, (accessToken) =>

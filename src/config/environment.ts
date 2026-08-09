@@ -16,6 +16,7 @@ import {
 	OFFLINE_SCOPE,
 	splitScopes,
 } from "@/auth/login/requested-scopes";
+import { LOG_LEVELS } from "@/lib/log";
 
 /**
  * Blank counts as unset, matching every reader: an exported-but-empty variable
@@ -109,6 +110,13 @@ const environmentSchema = z.object({
 			.int({ error: TIMEOUT_COMPLAINT })
 			.min(1, { error: TIMEOUT_COMPLAINT })
 			.max(MAX_TIMEOUT_MS, { error: TIMEOUT_COMPLAINT }),
+	),
+	WHOOP_LOG_LEVEL: unsetWhenBlank(
+		z.enum(LOG_LEVELS, {
+			error: `must name how much the server says on stderr: ${LOG_LEVELS.join(
+				", ",
+			)}`,
+		}),
 	),
 	WHOOP_TOKEN_STORE: unsetWhenBlank(z.string()),
 	WHOOP_SCOPES: unsetWhenBlank(scopeListSchema),
