@@ -1,8 +1,13 @@
 import { execFile } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { describe, expect, it } from "vitest";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const run = promisify(execFile);
 
@@ -95,6 +100,16 @@ describe("a misconfigured environment", () => {
 		expect(stderr).not.toContain("WHOOP_HTTP_TIMEOUT_MS");
 	}, 30_000);
 
+	it("still refuses `logout` over a value logout reads", async () => {
+		const { code, stderr } = await runBuilt(
+			["logout"],
+			environmentWith({ WHOOP_API_BASE_URL: "nowhere" }),
+		);
+
+		expect(code).not.toBe(0);
+		expect(stderr).toContain("WHOOP_API_BASE_URL");
+	}, 30_000);
+
 	it("warns about a WHOOP_ name it does not read, then carries on", async () => {
 		const { code, stderr } = await runBuilt(
 			["login"],
@@ -109,5 +124,79 @@ describe("a misconfigured environment", () => {
 		expect(stderr).toContain("WHOOP_TYPO");
 		expect(stderr).toContain("Cannot log in to WHOOP");
 		expect(code).not.toBe(0);
+	}, 30_000);
+});
+
+/** Everything a case opened, torn down after it in reverse order. */
+const opened: (() => Promise<void>)[] = [];
+
+afterEach(async () => {
+	for (const close of opened.splice(0).reverse()) {
+		await close();
+	}
+});
+
+/** A throwaway directory for one case's token store. */
+async function temporaryStore(): Promise<string> {
+	const directory = await mkdtemp(join(tmpdir(), "mcp-whoop-gate-"));
+	opened.push(() => rm(directory, { recursive: true, force: true }));
+
+	return directory;
+}
+
+describe("a login-only variable serving never reads", () => {
+	it("leaves serving up, and says so on stderr", async () => {
+		// The whole point of the split: an MCP host reports a server that exits
+		// as failed and every tool goes with it, so a redirect URI serving does
+		// not consume must not be able to do that. Speaking MCP to the built
+		// binary is the proof — it answered, so it started.
+		const client = new Client({ name: "environment-gate-test", version: "0" });
+		const transport = new StdioClientTransport({
+			command: process.execPath,
+			args: [builtEntry],
+			cwd: repoRoot,
+			env: {
+				WHOOP_TOKEN_STORE: await temporaryStore(),
+				WHOOP_REDIRECT_URI: "not a url",
+				WHOOP_SCOPES: "read:sleep read:sleeep",
+			},
+			stderr: "pipe",
+		});
+
+		const chunks: Buffer[] = [];
+		transport.stderr?.on("data", (chunk: Buffer) => {
+			chunks.push(chunk);
+		});
+		const stderr = () => Buffer.concat(chunks).toString("utf8");
+
+		await client.connect(transport);
+		try {
+			await expect(client.listTools()).resolves.toBeDefined();
+		} finally {
+			await client.close();
+		}
+
+		// Not stopped by them, not silent about them either.
+		await vi.waitFor(() => {
+			expect(stderr()).toContain("WHOOP_REDIRECT_URI");
+		});
+		expect(stderr()).toContain("WHOOP_SCOPES");
+		expect(stderr()).toContain("only `login` reads");
+		expect(stderr()).not.toContain("Cannot start mcp-whoop");
+	}, 30_000);
+
+	it("still refuses `login` over the same values", async () => {
+		const { code, stderr } = await runBuilt(
+			["login"],
+			environmentWith({
+				WHOOP_REDIRECT_URI: "not a url",
+				WHOOP_SCOPES: "read:sleep read:sleeep",
+			}),
+		);
+
+		expect(code).not.toBe(0);
+		expect(stderr).toContain("Cannot start mcp-whoop");
+		expect(stderr).toContain("WHOOP_REDIRECT_URI");
+		expect(stderr).toContain("WHOOP_SCOPES");
 	}, 30_000);
 });

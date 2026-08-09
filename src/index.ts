@@ -5,6 +5,8 @@
  * argument selects so serving MCP never loads the login command and vice versa.
  */
 
+import type { Command } from "@/config/environment";
+
 /**
  * Defaults to serving MCP over stdio, which is what an MCP client spawns.
  * `stdio` is accepted as an explicit argument too, since a client
@@ -23,8 +25,21 @@ const USAGE = [
 	"  logout  Revoke this server's WHOOP access and forget the stored login",
 ].join("\n");
 
-/** The commands this binary answers to. */
-const COMMANDS = new Set(["stdio", "login", "logout"]);
+/**
+ * The commands this binary answers to. Typed as {@link Command} so the gate
+ * below is asked about a command it knows the read surface of — a new command
+ * here has to be given one there before it compiles.
+ */
+const COMMANDS = [
+	"stdio",
+	"login",
+	"logout",
+] as const satisfies readonly Command[];
+
+/** Whether the argument names a command, narrowing it when it does. */
+function isCommand(value: string): value is Command {
+	return (COMMANDS as readonly string[]).includes(value);
+}
 
 /**
  * Refusals set `process.exitCode` and return rather than calling
@@ -34,7 +49,7 @@ const COMMANDS = new Set(["stdio", "login", "logout"]);
  * once the report has flushed.
  */
 async function run(): Promise<void> {
-	if (!COMMANDS.has(command)) {
+	if (!isCommand(command)) {
 		console.error(`Unknown command: ${command}`);
 		console.error(USAGE);
 		process.exitCode = 1;
@@ -44,14 +59,15 @@ async function run(): Promise<void> {
 
 	// The environment gate sits between the command check and the dispatch: a
 	// mistyped command is an invocation mistake and reads as usage, but a value
-	// the environment misdescribes must stop every command the same way, before
-	// any of them acts on it. Both reports go to stderr — under `stdio`, stdout
-	// belongs to the protocol from the first byte.
+	// the environment misdescribes must stop the commands that read it before
+	// they act on it. It is asked about this command in particular, so a
+	// login-only variable cannot take serving down. Both reports go to stderr —
+	// under `stdio`, stdout belongs to the protocol from the first byte.
 	const { environmentProblems, environmentWarnings } = await import(
 		"@/config/environment"
 	);
 
-	const problems = environmentProblems(process.env);
+	const problems = environmentProblems(process.env, command);
 
 	if (problems) {
 		console.error(problems);
@@ -60,7 +76,7 @@ async function run(): Promise<void> {
 		return;
 	}
 
-	const warnings = environmentWarnings(process.env);
+	const warnings = environmentWarnings(process.env, command);
 
 	if (warnings) {
 		console.error(warnings);

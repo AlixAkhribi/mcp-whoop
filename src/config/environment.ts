@@ -122,26 +122,69 @@ const environmentSchema = z.object({
 	WHOOP_SCOPES: unsetWhenBlank(scopeListSchema),
 });
 
+/** The commands this gate can be asked about (`src/index.ts` dispatches them). */
+export type Command = "stdio" | "login" | "logout";
+
 /**
- * The problems with this environment, as the user should read them: one line
- * per misconfigured variable, in the order the schema declares them, or
- * undefined when everything set parses. Values are never echoed back — the
- * checklist names variables, and one of them is a secret.
+ * The variables `login` alone reads: the redirect it sends the browser back to
+ * (`src/auth/login/environment.ts`) and the scopes it asks for
+ * (`src/auth/login/requested-scopes.ts`). Everything else in the schema is read
+ * by every command, so absence from this set — the default for anything added
+ * later — means "gated everywhere", which errs toward the loud failure this
+ * gate exists to produce rather than the silent one.
+ *
+ * The split exists because serving must not be killable by a value it never
+ * consumes: an MCP host reports a server that exits as failed and every tool
+ * disappears with it, and `.env.example` invites copying the whole login block
+ * into that server entry, so a typo'd redirect URI there is a realistic way to
+ * lose WHOOP access entirely. Under a command that does not read them these
+ * two are demoted to a warning, never ignored.
+ */
+const LOGIN_ONLY = new Set<string>(["WHOOP_REDIRECT_URI", "WHOOP_SCOPES"]);
+
+/** Every complaint this environment earns, by variable name. */
+function complaintsIn(
+	env: NodeJS.ProcessEnv,
+): Partial<Record<string, string[]>> {
+	const parsed = environmentSchema.safeParse(env);
+
+	return parsed.success ? {} : z.flattenError(parsed.error).fieldErrors;
+}
+
+/**
+ * The `  - NAME complaint` lines for the variables `wanted` selects, in the
+ * order the schema declares them.
+ */
+function checklist(
+	complaints: Partial<Record<string, string[]>>,
+	wanted: (name: string) => boolean,
+): string[] {
+	return Object.keys(environmentSchema.shape)
+		.filter(wanted)
+		.flatMap((name) =>
+			(complaints[name] ?? []).map((complaint) => `  - ${name} ${complaint}`),
+		);
+}
+
+/**
+ * The problems with this environment that stand in `command`'s way, as the
+ * user should read them: one line per misconfigured variable `command` reads,
+ * in the order the schema declares them, or undefined when everything it reads
+ * parses. A variable outside its surface ({@link LOGIN_ONLY}) is left to
+ * {@link environmentWarnings}. Values are never echoed back — the checklist
+ * names variables, and one of them is a secret.
  */
 export function environmentProblems(
 	env: NodeJS.ProcessEnv,
+	command: Command,
 ): string | undefined {
-	const parsed = environmentSchema.safeParse(env);
-	if (parsed.success) {
+	const lines = checklist(
+		complaintsIn(env),
+		(name) => command === "login" || !LOGIN_ONLY.has(name),
+	);
+	if (lines.length === 0) {
 		return undefined;
 	}
-
-	const complaints: Partial<Record<string, string[]>> = z.flattenError(
-		parsed.error,
-	).fieldErrors;
-	const lines = Object.keys(environmentSchema.shape).flatMap((name) =>
-		(complaints[name] ?? []).map((complaint) => `  - ${name} ${complaint}`),
-	);
 
 	return [
 		"Cannot start mcp-whoop: the environment misconfigures it.",
@@ -152,16 +195,14 @@ export function environmentProblems(
 }
 
 /**
- * The warning this environment earns, or undefined when it earns none: a
- * `WHOOP_*` name this server does not read is almost certainly a mistyped one
- * — `WHOOP_TIMEOUT_MS` for `WHOOP_HTTP_TIMEOUT_MS` — and would otherwise be
- * ignored without a trace. Only a warning, never a refusal, because the
- * prefix is not owned: another WHOOP tool on the same machine may export
- * names of its own.
+ * The warning a `WHOOP_*` name this server does not read earns: it is almost
+ * certainly a mistyped one — `WHOOP_TIMEOUT_MS` for `WHOOP_HTTP_TIMEOUT_MS` —
+ * and would otherwise be ignored without a trace. Only a warning, never a
+ * refusal, because the prefix is not owned: another WHOOP tool on the same
+ * machine may export names of its own. Which command is running makes no
+ * difference to it — a name nothing reads is a typo under all of them.
  */
-export function environmentWarnings(
-	env: NodeJS.ProcessEnv,
-): string | undefined {
+function strangerWarning(env: NodeJS.ProcessEnv): string | undefined {
 	const strangers = Object.keys(env)
 		.filter(
 			(name) => name.startsWith("WHOOP_") && !(name in environmentSchema.shape),
@@ -177,4 +218,57 @@ export function environmentWarnings(
 		}.`,
 		`This server reads ${Object.keys(environmentSchema.shape).join(", ")}.`,
 	].join("\n");
+}
+
+/**
+ * What a malformed {@link LOGIN_ONLY} variable earns under a command that
+ * never reads it: the same checklist line `login` would refuse over, said as a
+ * warning. The value is not silently swallowed — that is the failure this gate
+ * exists to prevent — but it does not take down a command it has no bearing
+ * on either.
+ */
+function loginOnlyWarning(
+	env: NodeJS.ProcessEnv,
+	command: Command,
+): string | undefined {
+	if (command === "login") {
+		return undefined;
+	}
+
+	const complaints = complaintsIn(env);
+	const broken = Object.keys(environmentSchema.shape).filter(
+		(name) => LOGIN_ONLY.has(name) && (complaints[name]?.length ?? 0) > 0,
+	);
+	if (broken.length === 0) {
+		return undefined;
+	}
+
+	const one = broken.length === 1;
+
+	return [
+		`Ignoring ${broken.join(", ")}: only \`login\` reads ${
+			one ? "it" : "them"
+		}, and \`login\` is not what is running.`,
+		...checklist(complaints, (name) => broken.includes(name)),
+		`\`${command}\` carries on. Fix ${
+			one ? "it" : "them"
+		} before the next \`mcp-whoop login\`.`,
+	].join("\n");
+}
+
+/**
+ * The warnings this environment earns under `command`, or undefined when it
+ * earns none: a `WHOOP_*` name nothing reads, and a login-only variable
+ * `command` will not be stopped by. Both are things worth saying that are not
+ * worth refusing over.
+ */
+export function environmentWarnings(
+	env: NodeJS.ProcessEnv,
+	command: Command,
+): string | undefined {
+	const blocks = [strangerWarning(env), loginOnlyWarning(env, command)].filter(
+		(block) => block !== undefined,
+	);
+
+	return blocks.length > 0 ? blocks.join("\n\n") : undefined;
 }
