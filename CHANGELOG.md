@@ -1,3 +1,16 @@
+# [0.5.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.4.0...v0.5.0) (2026-08-09)
+
+
+### Bug Fixes
+
+* state public access so npm will attest the first publish ([3182ae2](https://github.com/AlixAkhribi/mcp-whoop/commit/3182ae2491b6ccc430bfe363ee0eebd3c38a40f4))
+
+
+### Features
+
+* log server activity to stderr with a configurable level ([17cf8c5](https://github.com/AlixAkhribi/mcp-whoop/commit/17cf8c50724a719769043168576fb635f2d5ac62))
+* scope the environment gate to the command being run ([edd845e](https://github.com/AlixAkhribi/mcp-whoop/commit/edd845ede2bb52116ed74c423717003c5ab7b16e))
+
 # [0.4.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.3.0...v0.4.0) (2026-08-09)
 
 
