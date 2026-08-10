@@ -1,3 +1,5 @@
 allowBuilds:
-  '@modelcontextprotocol/inspector': true
   esbuild: true
+
+# 24 hours, in minutes.
+minimumReleaseAge: 1440
