@@ -1,2 +1,5 @@
 allowBuilds:
   esbuild: true
+
+# 24 hours, in minutes.
+minimumReleaseAge: 1440
