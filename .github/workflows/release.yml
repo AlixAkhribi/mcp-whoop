@@ -26,13 +26,12 @@ permissions:
   # case-sensitive, extension included — so renaming it revokes publish rights
   # until the registry side is updated to match.
   #
-  # The same token is what signs the provenance attestation that puts "Built and
-  # signed on GitHub Actions" on the npm page. OIDC publishes attest by default;
-  # `publishConfig.provenance` in package.json is what earns the badge on the
-  # one bootstrap publish below, which still authenticates with a token. Its
-  # `access: "public"` sits beside it because npm refuses to attest a package
-  # the registry has never seen — which `mcp-whoop` is, having been unpublished
-  # — until the access it would default to anyway is stated outright.
+  # The same token signs the provenance attestation that puts "Built and
+  # signed on GitHub Actions" on the npm page. OIDC publishes attest by
+  # default; `publishConfig.provenance` in package.json states that intent
+  # outright, and its `access: "public"` sits beside it because npm refuses
+  # to attest a package it considers new until the access it would default
+  # to anyway is stated as well.
   id-token: write
 
 jobs:
@@ -44,6 +43,16 @@ jobs:
       # `npm publish` packs the tarball.
       HUSKY: 0
     steps:
+      # semantic-release pushes the release commit and the tag during
+      # `prepare`, before `npm publish` runs — so a publish that cannot
+      # authenticate leaves `main` claiming a release the registry never saw.
+      # Twice the cleanup has been exactly that. Trusted publishing cannot
+      # create a package that has never been published, so until `mcp-whoop`
+      # exists on the registry this job cannot succeed; checking first keeps
+      # the failure ahead of everything that writes.
+      - name: Stop early if the registry has no mcp-whoop
+        run: curl --silent --fail --retry 3 https://registry.npmjs.org/mcp-whoop > /dev/null
+
       - uses: actions/checkout@v7
         with:
           # semantic-release finds the last release from the tags and the next
@@ -93,10 +102,4 @@ jobs:
           # Reads the repository and writes the GitHub release. The npm half of
           # the job is OIDC and takes no token.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Bootstrap only: trusted publishing can't create a package that has
-          # never been published, so the first release authenticates with a
-          # short-lived granular token instead. Once `mcp-whoop` exists and its
-          # trusted publisher is configured on npmjs.com, delete this line and
-          # the repository secret — OIDC takes over from then on.
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm exec semantic-release
