@@ -100,6 +100,7 @@ export async function fetchSleepPage(
 	accessToken: string,
 	query: SleepPageQuery = {},
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopSleepPage> {
 	const endpoint = sleepCollectionEndpoint(env);
 	// Relayed verbatim, under WHOOP's own parameter names, so the arguments a
@@ -115,6 +116,7 @@ export async function fetchSleepPage(
 			authorization: `Bearer ${accessToken}`,
 			accept: "application/json",
 		},
+		signal,
 	});
 	if (response.status === 401) {
 		throw new WhoopUnauthorizedError();
@@ -192,6 +194,7 @@ export async function fetchCycleSleepOrAbsent(
 	accessToken: string,
 	cycleId: number,
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopSleep | null> {
 	const response = await whoopFetch(
 		"the cycle sleep read",
@@ -201,6 +204,7 @@ export async function fetchCycleSleepOrAbsent(
 				authorization: `Bearer ${accessToken}`,
 				accept: "application/json",
 			},
+			signal,
 		},
 	);
 	if (response.status === 401) {

@@ -62,6 +62,7 @@ export async function fetchCyclePage(
 	accessToken: string,
 	query: CyclePageQuery = {},
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopCyclePage> {
 	const endpoint = cycleCollectionEndpoint(env);
 	// Relayed verbatim, under WHOOP's own parameter names, so the arguments a
@@ -77,6 +78,7 @@ export async function fetchCyclePage(
 			authorization: `Bearer ${accessToken}`,
 			accept: "application/json",
 		},
+		signal,
 	});
 	if (response.status === 401) {
 		throw new WhoopUnauthorizedError();

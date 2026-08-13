@@ -21,6 +21,7 @@ export type WhoopBodyMeasurement = z.infer<typeof bodyMeasurementSchema>;
 export async function fetchBodyMeasurements(
 	accessToken: string,
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopBodyMeasurement> {
 	const response = await whoopFetch(
 		"the body-measurement read",
@@ -30,6 +31,7 @@ export async function fetchBodyMeasurements(
 				authorization: `Bearer ${accessToken}`,
 				accept: "application/json",
 			},
+			signal,
 		},
 	);
 	if (response.status === 401) {

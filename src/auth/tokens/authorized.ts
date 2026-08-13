@@ -85,6 +85,12 @@ async function refreshAndPersist(
  * A token the store still trusts but WHOOP answers 401 to — revoked, or expired
  * by a clock this server cannot see — buys exactly one refresh and retry. A
  * second 401 propagates, since another refresh would only loop.
+ *
+ * The refresh path deliberately takes no cancellation signal: WHOOP refresh
+ * tokens are single-use, so an abort landing after WHOOP consumed one but
+ * before the rotation reached the store would kill the login for every process
+ * sharing it. A refresh that has started must land; only the data reads around
+ * it are abandonable.
  */
 export async function withValidAccessToken<T>(
 	stored: StoredTokens,

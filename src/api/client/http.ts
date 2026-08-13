@@ -50,10 +50,11 @@ export function whoopRequestTimeoutMs(
  *
  * The request is bounded by {@link whoopRequestTimeoutMs}, so a WHOOP that
  * never answers ends the same way an unreachable one does rather than holding
- * a tool call open for as long as the runtime would allow. That bound is the
- * request's only `signal`: a caller handing one in has it replaced, so a caller
- * that needs to abort a WHOOP request for reasons of its own has to be given a
- * seam here rather than passing one through.
+ * a tool call open for as long as the runtime would allow. A caller's own
+ * `init.signal` rides beside that bound rather than replacing it: whichever
+ * fires first ends the request, which is how an MCP cancellation reaches the
+ * WHOOP request it made pointless — the stdio transport rules say a server
+ * should stop work on a cancelled request as soon as practical.
  *
  * Every request also lands one stderr line — the answered status at `debug`,
  * no answer at all at `warning`. The line names the method and path alone:
@@ -66,14 +67,21 @@ export async function whoopFetch(
 	init?: RequestInit,
 ): Promise<Response> {
 	const method = init?.method ?? "GET";
+	const bound = AbortSignal.timeout(whoopRequestTimeoutMs());
 	const started = performance.now();
 	let response: Response;
 	try {
 		response = await fetch(url, {
 			...init,
-			signal: AbortSignal.timeout(whoopRequestTimeoutMs()),
+			signal: init?.signal ? AbortSignal.any([init.signal, bound]) : bound,
 		});
 	} catch (cause) {
+		// A caller that cancelled is not a WHOOP that went unanswered: nobody is
+		// waiting for this message, so it claims neither a failure nor a retry.
+		if (init?.signal?.aborted) {
+			log.debug(`${method} ${url.pathname} was cancelled for ${what}`);
+			throw new Error(`${what} was cancelled before WHOOP answered.`);
+		}
 		log.warning(
 			`${method} ${url.pathname} got no answer for ${what}: ${describeRedacted(cause)}`,
 		);
