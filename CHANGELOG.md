@@ -1,3 +1,11 @@
+# [0.6.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.5.0...v0.6.0) (2026-08-13)
+
+
+### Features
+
+* serve whoop data as scope-gated mcp resources ([e95120b](https://github.com/AlixAkhribi/mcp-whoop/commit/e95120b907db4241666ccff7b9c2907e781d0cf9))
+* thread cancellation through the whoop fetch layer ([9b1dcad](https://github.com/AlixAkhribi/mcp-whoop/commit/9b1dcadffb9e106fa4eaf72d8c03c8292f760088))
+
 # [0.5.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.4.0...v0.5.0) (2026-08-10)
 
 
