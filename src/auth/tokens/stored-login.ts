@@ -1,4 +1,4 @@
-import { readStoredTokens, type StoredTokens } from "@/auth/tokens/store";
+import { readStoredTokens, type StoredTokens } from "./store";
 
 /**
  * Shown when the server has never been logged in. It names the out-of-band
@@ -17,10 +17,12 @@ const STORE_UNREADABLE =
 	"The stored WHOOP login could not be read. Run `npx mcp-whoop login` in a terminal to log in again, then try again.";
 
 /**
- * The stored login every WHOOP data tool starts from, read fresh per call.
+ * The stored login every read of WHOOP data starts from — whichever surface
+ * asked, a tool or a resource — read fresh per call.
  *
  * @throws When no store exists or it cannot be trusted, carrying the message
- * that names the login command — the shared failure mode of the tool surface.
+ * that names the login command — the shared failure mode of everything this
+ * server serves.
  */
 export async function requireStoredLogin(): Promise<StoredTokens> {
 	const tokens = await readStoredTokens().catch(() => {

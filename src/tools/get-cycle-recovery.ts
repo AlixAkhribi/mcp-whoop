@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { fetchCycleRecovery, recoverySchema } from "@/api/data/recoveries";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { requireStoredLogin } from "@/auth/tokens/stored-login";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * The `get_cycle_recovery` input: the id of the cycle whose recovery to read,

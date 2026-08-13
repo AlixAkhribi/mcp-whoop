@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { fetchWorkout, workoutSchema } from "@/api/data/workouts";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { requireStoredLogin } from "@/auth/tokens/stored-login";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * The `get_workout` input: the id of the workout to read, named as WHOOP's
