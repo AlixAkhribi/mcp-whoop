@@ -92,6 +92,32 @@ A summary tool answers a question a model would otherwise assemble by hand from 
 | `get_recovery_summary` | `days` (1–30, default 7) | "How has my recovery been?" — the last N cycle-days digested: how many WHOOP holds and has scored, the mean, low and high of recovery score, heart rate variability and resting heart rate, and one row per day |
 | `get_today_snapshot` | none | "How am I today?" — the cycle running now with the strain accumulated in it so far, the recovery scored for it, and the sleep that started it. A recovery WHOOP has not scored yet, or a sleep it has no record of, is reported as a state of the day rather than as an error |
 
+### Resources
+
+Beside the tools, the server serves five resources: pieces of WHOOP context a user picks out of their client's attachment list and hands to a conversation, where a tool is what the model reaches for on its own. They unlock nothing the tools cannot reach — each one answers with the very same JSON its tool counterpart answers with — what changes is who initiates the fetch. The set is curated for a person scanning that list, so every entry is question-shaped rather than a second mirror of WHOOP's API, and none of them takes arguments: the span a resource speaks for is in its URI.
+
+| Resource | Answers | Scopes |
+| --- | --- | --- |
+| `whoop://today` | "How am I today?" — the cycle running now with the strain accumulated in it so far, the recovery scored for it, and the sleep that started it | `read:cycles` + `read:recovery` + `read:sleep` |
+| `whoop://profile` | "Who is this server logged in as?" — the account's name, email address and WHOOP user id | `read:profile` |
+| `whoop://body-measurements` | "What body are these numbers scored against?" — height, weight, max heart rate | `read:body_measurement` |
+| `whoop://recovery/last-week` | "How has my recovery been?" — the last seven cycle-days of recovery digested, one row per day | `read:cycles` + `read:recovery` |
+| `whoop://sleep/last-week` | "How have I been sleeping?" — the last seven nights digested, naps counted apart, one row per night | `read:sleep` |
+
+The list is the same five entries whatever the login was granted: the MCP revision this server speaks (2026-07-28) requires `resources/list` to answer with what is currently available and not to vary with connection state, and the recorded grant is exactly that kind of state — a re-login can rewrite it while a client stays connected. So the login's granted scopes gate each read instead, checked against the store as it stands when the read runs: reading a resource whose scopes were not granted is refused with the missing scopes and the login command that fixes them, exactly as every read is refused when nothing is logged in yet. Log in with all six read scopes (the default) and every entry on the table answers.
+
+Every entry is a snapshot, not a stream: a read answers with the numbers WHOOP holds at that moment, and the client re-reads the URI whenever it wants fresher ones. The server never pushes updates — it accepts no subscription and sends no change notification, so nothing already attached to a conversation changes underneath it. Every read also answers with a zero reuse lifetime (`ttlMs: 0`, the revision's "immediately stale"): each answer is bound to whoever the stored login belongs to, and a re-login can hand the store to a different WHOOP account without anything an MCP client can observe changing — so rather than promise a freshness it cannot stand behind, the server tells clients to re-read every time. The listing itself is the part that holds still, and it alone carries an hour's lifetime.
+
+To browse the surface yourself, point the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) at the TypeScript source. It spawns this server over stdio exactly as an MCP host does, and the stored login carries everything the spawned process needs:
+
+```sh
+pnpm inspect                                                  # web UI
+pnpm inspect:cli --method resources/list                      # the five resources, listed
+pnpm inspect:cli --method resources/read --uri whoop://today  # one of them, read
+```
+
+In the web UI, connect, open the **Resources** tab and press **List Resources**: back come the five entries of the table above, each with the title and description a client's picker shows a person. Select one and the JSON a read answers with fills the pane beside the list; select it again for a fresher copy — a second read is the whole freshness story, since nothing arrives unasked. The CLI answers the same two questions without a browser, which is the quickest way to check what a narrowed login is refused: `resources/list` prints the listing, and `resources/read` prints one resource's JSON for the `--uri` you name — or, for a scope the login was not granted, the refusal that names it.
+
 ### Logging out
 
 ```sh
