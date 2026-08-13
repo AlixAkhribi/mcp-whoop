@@ -68,6 +68,7 @@ export async function fetchRecoveryPage(
 	accessToken: string,
 	query: RecoveryPageQuery = {},
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopRecoveryPage> {
 	const endpoint = recoveryCollectionEndpoint(env);
 	// Relayed verbatim, under WHOOP's own parameter names, so the arguments a
@@ -83,6 +84,7 @@ export async function fetchRecoveryPage(
 			authorization: `Bearer ${accessToken}`,
 			accept: "application/json",
 		},
+		signal,
 	});
 	if (response.status === 401) {
 		throw new WhoopUnauthorizedError();
@@ -120,6 +122,7 @@ export async function fetchCycleRecoveryOrAbsent(
 	accessToken: string,
 	cycleId: number,
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopRecovery | null> {
 	const response = await whoopFetch(
 		"the cycle recovery read",
@@ -129,6 +132,7 @@ export async function fetchCycleRecoveryOrAbsent(
 				authorization: `Bearer ${accessToken}`,
 				accept: "application/json",
 			},
+			signal,
 		},
 	);
 	if (response.status === 401) {

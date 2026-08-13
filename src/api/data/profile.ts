@@ -22,12 +22,14 @@ export type WhoopProfile = z.infer<typeof profileSchema>;
 export async function fetchProfile(
 	accessToken: string,
 	env: NodeJS.ProcessEnv = process.env,
+	signal?: AbortSignal,
 ): Promise<WhoopProfile> {
 	const response = await whoopFetch("the profile read", profileEndpoint(env), {
 		headers: {
 			authorization: `Bearer ${accessToken}`,
 			accept: "application/json",
 		},
+		signal,
 	});
 	if (response.status === 401) {
 		throw new WhoopUnauthorizedError();
