@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { fetchSleep, sleepSchema } from "@/api/data/sleeps";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { requireStoredLogin } from "@/auth/tokens/stored-login";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * The `get_sleep` input: the id of the sleep to read, named as WHOOP's

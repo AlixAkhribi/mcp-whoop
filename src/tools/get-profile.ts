@@ -1,11 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { fetchProfile, profileSchema } from "@/api/data/profile";
-import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { answerProfile } from "@/answers/profile";
+import { profileSchema } from "@/api/data/profile";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * No input: whose profile is read follows from the stored login. Spelled as an
@@ -28,16 +27,10 @@ export function registerGetProfileTool(server: McpServer): void {
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
 		observedTool("get_profile", async () => {
-			const tokens = await requireStoredLogin();
-
-			const profile = await withValidAccessToken(tokens, (accessToken) =>
-				fetchProfile(accessToken),
-			);
+			const { profile, json } = await answerProfile();
 
 			return {
-				content: [
-					{ type: "text" as const, text: JSON.stringify(profile, null, "\t") },
-				],
+				content: [{ type: "text" as const, text: json }],
 				structuredContent: profile,
 			};
 		}),

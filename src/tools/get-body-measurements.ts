@@ -1,14 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import {
-	bodyMeasurementSchema,
-	fetchBodyMeasurements,
-} from "@/api/data/body-measurements";
-import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { answerBodyMeasurements } from "@/answers/body-measurements";
+import { bodyMeasurementSchema } from "@/api/data/body-measurements";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * No input: whose measurements are read follows from the stored login. Spelled
@@ -31,19 +27,10 @@ export function registerGetBodyMeasurementsTool(server: McpServer): void {
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
 		observedTool("get_body_measurements", async () => {
-			const tokens = await requireStoredLogin();
-
-			const measurements = await withValidAccessToken(tokens, (accessToken) =>
-				fetchBodyMeasurements(accessToken),
-			);
+			const { measurements, json } = await answerBodyMeasurements();
 
 			return {
-				content: [
-					{
-						type: "text" as const,
-						text: JSON.stringify(measurements, null, "\t"),
-					},
-				],
+				content: [{ type: "text" as const, text: json }],
 				structuredContent: measurements,
 			};
 		}),

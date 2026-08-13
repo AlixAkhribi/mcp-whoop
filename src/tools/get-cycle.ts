@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { cycleSchema, fetchCycle } from "@/api/data/cycles";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { requireStoredLogin } from "@/auth/tokens/stored-login";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * The `get_cycle` input: the id of the cycle to read, named as WHOOP's

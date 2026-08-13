@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { cyclePageSchema, fetchCyclePage } from "@/api/data/cycles";
 import { withValidAccessToken } from "@/auth/tokens/authorized";
+import { requireStoredLogin } from "@/auth/tokens/stored-login";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
-import { requireStoredLogin } from "./stored-login";
 
 /**
  * The `list_cycles` input, mirroring the query WHOOP's `GET /v2/cycle`
