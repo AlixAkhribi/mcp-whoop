@@ -1,5 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 
+import { BODY_MEASUREMENT_SCOPES } from "@/answers/body-measurements";
+import { PROFILE_SCOPES } from "@/answers/profile";
+import { grantAllows } from "@/auth/tokens/granted-scopes";
+import { RECOVERY_SUMMARY_SCOPES } from "@/summaries/recovery";
+import { SLEEP_SUMMARY_SCOPES } from "@/summaries/sleep";
+import { TODAY_SNAPSHOT_SCOPES } from "@/summaries/today";
 import { registerGetBodyMeasurementsTool } from "./get-body-measurements";
 import { registerGetCycleTool } from "./get-cycle";
 import { registerGetCycleRecoveryTool } from "./get-cycle-recovery";
@@ -33,20 +39,21 @@ export function registerTools(
 	server: McpServer,
 	grantedScopes?: readonly string[],
 ): void {
-	if (grantedScopes === undefined || grantedScopes.includes("read:profile")) {
+	// The same scope a read of the `whoop://profile` resource demands when it
+	// runs — one scope list, two surfaces, two moments it is checked at.
+	if (grantAllows(grantedScopes, ...PROFILE_SCOPES)) {
 		registerGetProfileTool(server);
 	}
-	if (
-		grantedScopes === undefined ||
-		grantedScopes.includes("read:body_measurement")
-	) {
+	// The same scope a read of the `whoop://body-measurements` resource demands
+	// when it runs.
+	if (grantAllows(grantedScopes, ...BODY_MEASUREMENT_SCOPES)) {
 		registerGetBodyMeasurementsTool(server);
 	}
-	if (grantedScopes === undefined || grantedScopes.includes("read:cycles")) {
+	if (grantAllows(grantedScopes, "read:cycles")) {
 		registerListCyclesTool(server);
 		registerGetCycleTool(server);
 	}
-	if (grantedScopes === undefined || grantedScopes.includes("read:sleep")) {
+	if (grantAllows(grantedScopes, "read:sleep")) {
 		registerListSleepsTool(server);
 		registerGetSleepTool(server);
 		// WHOOP declares no scope for GET /v2/cycle/{cycleId}/sleep — `security`
@@ -55,37 +62,31 @@ export function registerTools(
 		// would have named.
 		registerGetCycleSleepTool(server);
 	}
-	if (grantedScopes === undefined || grantedScopes.includes("read:recovery")) {
+	if (grantAllows(grantedScopes, "read:recovery")) {
 		registerListRecoveriesTool(server);
 		registerGetCycleRecoveryTool(server);
 	}
-	if (grantedScopes === undefined || grantedScopes.includes("read:workout")) {
+	if (grantAllows(grantedScopes, "read:workout")) {
 		registerListWorkoutsTool(server);
 		registerGetWorkoutTool(server);
 	}
 	// Reads sleep like the mapping tools above, but is advertised here: the
 	// summaries stand together at the end of the canonical order, whichever
-	// grant each of them needs.
-	if (grantedScopes === undefined || grantedScopes.includes("read:sleep")) {
+	// grant each of them needs. The same scope a read of the
+	// `whoop://sleep/last-week` resource demands when it runs.
+	if (grantAllows(grantedScopes, ...SLEEP_SUMMARY_SCOPES)) {
 		registerGetSleepSummaryTool(server);
 	}
 	// A summary reading two listings needs both grants: half of them would only
-	// buy a tool that fails on the read it was not allowed to make.
-	if (
-		grantedScopes === undefined ||
-		(grantedScopes.includes("read:cycles") &&
-			grantedScopes.includes("read:recovery"))
-	) {
+	// buy a tool that fails on the read it was not allowed to make. The same
+	// two a read of the `whoop://recovery/last-week` resource demands when it
+	// runs.
+	if (grantAllows(grantedScopes, ...RECOVERY_SUMMARY_SCOPES)) {
 		registerGetRecoverySummaryTool(server);
 	}
-	// Today is a cycle, its recovery and its sleep at once: all three grants, or
-	// the snapshot could only answer part of the question it advertises.
-	if (
-		grantedScopes === undefined ||
-		(grantedScopes.includes("read:cycles") &&
-			grantedScopes.includes("read:recovery") &&
-			grantedScopes.includes("read:sleep"))
-	) {
+	// Today is a cycle, its recovery and its sleep at once — the same three a
+	// read of the `whoop://today` resource demands when it runs.
+	if (grantAllows(grantedScopes, ...TODAY_SNAPSHOT_SCOPES)) {
 		registerGetTodaySnapshotTool(server);
 	}
 }
