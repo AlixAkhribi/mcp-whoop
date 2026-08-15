@@ -22,5 +22,5 @@ export function observedResource<A extends unknown[], R>(
 	uri: string,
 	handler: (...args: A) => Promise<R>,
 ): (...args: A) => Promise<R> {
-	return observed({ what: uri, announce: `reading ${uri}` }, handler);
+	return observed({ operation: uri, announce: `reading ${uri}` }, handler);
 }

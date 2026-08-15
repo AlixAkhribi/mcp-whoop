@@ -9,14 +9,10 @@
  */
 
 import { z } from "zod";
-
-import { MAX_TIMEOUT_MS } from "@/api/client/http";
-import {
-	DEFAULT_READ_SCOPES,
-	OFFLINE_SCOPE,
-	splitScopes,
-} from "@/auth/login/requested-scopes";
+import { MAX_HTTP_TIMEOUT_MS } from "@/config/http";
 import { LOG_LEVELS } from "@/lib/log";
+import { splitScopes } from "@/whoop/auth/login/requested-scopes";
+import { DEFAULT_READ_SCOPES, OFFLINE_SCOPE } from "@/whoop/auth/tokens/scopes";
 
 /**
  * Blank counts as unset, matching every reader: an exported-but-empty variable
@@ -32,7 +28,7 @@ function unsetWhenBlank(schema: z.ZodType) {
 }
 
 /** One complaint fits every way a timeout can fail to be one. */
-const TIMEOUT_COMPLAINT = `must be a whole number of milliseconds from 1 to ${MAX_TIMEOUT_MS}, like 30000`;
+const TIMEOUT_COMPLAINT = `must be a whole number of milliseconds from 1 to ${MAX_HTTP_TIMEOUT_MS}, like 30000`;
 
 /** Every scope this server could ever ask WHOOP for. */
 const KNOWN_SCOPES = new Set<string>([...DEFAULT_READ_SCOPES, OFFLINE_SCOPE]);
@@ -77,7 +73,7 @@ const scopeListSchema = z.string().check((ctx) => {
  * The variables this server reads, each validated as its reader will use it.
  * The credentials and the store path are shapeless — any non-blank string
  * could be real, so only their presence can be judged, and that judgement
- * belongs to `login` (`src/auth/login/environment.ts`) — but they are listed
+ * belongs to the login credential reader — but they are listed
  * so this object is the one complete account of the surface.
  */
 const environmentSchema = z.object({
@@ -98,7 +94,7 @@ const environmentSchema = z.object({
 			})
 			// The raw characters, not the parsed components: a bare trailing `?`
 			// or `#` parses to an empty search and hash yet still swallows every
-			// appended endpoint path (`src/api/client/endpoints.ts`).
+			// appended endpoint path (`src/whoop/api/client/endpoints.ts`).
 			.refine((base) => !/[?#]/.test(base), {
 				error:
 					"must carry no query or fragment: every endpoint path is appended to it and would land inside them",
@@ -109,7 +105,7 @@ const environmentSchema = z.object({
 			.number({ error: TIMEOUT_COMPLAINT })
 			.int({ error: TIMEOUT_COMPLAINT })
 			.min(1, { error: TIMEOUT_COMPLAINT })
-			.max(MAX_TIMEOUT_MS, { error: TIMEOUT_COMPLAINT }),
+			.max(MAX_HTTP_TIMEOUT_MS, { error: TIMEOUT_COMPLAINT }),
 	),
 	WHOOP_LOG_LEVEL: unsetWhenBlank(
 		z.enum(LOG_LEVELS, {
@@ -122,16 +118,13 @@ const environmentSchema = z.object({
 	WHOOP_SCOPES: unsetWhenBlank(scopeListSchema),
 });
 
-/** The commands this gate can be asked about (`src/index.ts` dispatches them). */
+/** The commands this gate can validate. */
 export type Command = "stdio" | "login" | "logout";
 
 /**
  * The variables `login` alone reads: the redirect it sends the browser back to
- * (`src/auth/login/environment.ts`) and the scopes it asks for
- * (`src/auth/login/requested-scopes.ts`). Everything else in the schema is read
- * by every command, so absence from this set — the default for anything added
- * later — means "gated everywhere", which errs toward the loud failure this
- * gate exists to produce rather than the silent one.
+ * and the scopes it asks for. Everything else in the schema is read by every
+ * command, so absence from this set means "gated everywhere".
  *
  * The split exists because serving must not be killable by a value it never
  * consumes: an MCP host reports a server that exits as failed and every tool

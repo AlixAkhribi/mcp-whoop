@@ -1,24 +1,17 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { jsonToolResult } from "@/json";
 import {
-	answerSleepSummary,
+	readSleepSummary,
 	SLEEP_SUMMARY_DEFAULT_DAYS,
 	SLEEP_SUMMARY_MAX_DAYS,
 	sleepSummarySchema,
-} from "@/summaries/sleep";
+} from "@/whoop/reads/sleep-summary";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
 
-/**
- * The `get_sleep_summary` input: a count of the most recent nights, never a
- * pair of instants. The bounds live in the integer itself, so a call outside
- * them is refused by the advertised schema before anything is asked of WHOOP.
- *
- * The default is the shared path's own, not a number repeated here: a call that
- * names no days and a read of `whoop://sleep/last-week` are the same week.
- */
-const getSleepSummaryInputSchema = z.object({
+const getSleepSummaryInputSchema = z.strictObject({
 	days: z
 		.int()
 		.min(1)
@@ -29,7 +22,6 @@ const getSleepSummaryInputSchema = z.object({
 		),
 });
 
-/** Registers the `get_sleep_summary` tool on a server instance. */
 export function registerGetSleepSummaryTool(server: McpServer): void {
 	server.registerTool(
 		"get_sleep_summary",
@@ -41,13 +33,13 @@ export function registerGetSleepSummaryTool(server: McpServer): void {
 			outputSchema: sleepSummarySchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("get_sleep_summary", async ({ days }) => {
-			const { summary, json } = await answerSleepSummary(days);
+		observedTool("get_sleep_summary", async ({ days }, ctx: ServerContext) => {
+			const summary = await readSleepSummary({
+				days,
+				signal: ctx.mcpReq.signal,
+			});
 
-			return {
-				content: [{ type: "text" as const, text: json }],
-				structuredContent: summary,
-			};
+			return jsonToolResult(summary);
 		}),
 	);
 }

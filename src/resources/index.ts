@@ -16,12 +16,12 @@ import { registerTodayResource } from "./today";
  * is canonical rather than incidental: the day first, the person it belongs to
  * next, and the two weeks that explain the day last, widest span at the end.
  *
- * All five are registered unconditionally: the 2026-07-28 revision requires
+ * All are registered unconditionally: the 2026-07-28 revision requires
  * `resources/list` to answer with what is currently available and forbids it
  * varying with connection state, and the stored grant is exactly that — it can
  * be rewritten by a re-login while a connection is held, which registrations
  * taken from a startup snapshot would never track. So the listing is the same
- * five for every login, and the grant gates each *read* instead, inside the
+ * set for every login, and the grant gates each *read* instead, inside the
  * shared answer paths, against the store as it stands at that moment: a read
  * the current grant does not permit refuses by naming the missing scopes and
  * the login command — the same way every read already refuses when nothing is

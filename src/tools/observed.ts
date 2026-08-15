@@ -16,5 +16,5 @@ export function observedTool<A extends unknown[], R>(
 	name: string,
 	handler: (...args: A) => Promise<R>,
 ): (...args: A) => Promise<R> {
-	return observed({ what: name, announce: `${name} called` }, handler);
+	return observed({ operation: name, announce: `${name} called` }, handler);
 }

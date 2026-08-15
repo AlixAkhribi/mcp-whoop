@@ -7,7 +7,7 @@
  * failure cannot carry token material into those files.
  */
 
-import { redactSecrets } from "@/lib/redaction";
+import { redactSecrets } from "./redaction";
 
 /**
  * The levels this server speaks, least to most severe — the slice of the RFC
@@ -26,7 +26,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 const DEFAULT_LEVEL: LogLevel = "info";
 
 /** What a logger is resolved against. Every field defaults to the process. */
-export type LoggerOptions = {
+type LoggerOptions = {
 	/** Environment `WHOOP_LOG_LEVEL` is read from. */
 	env?: NodeJS.ProcessEnv;
 	/** Where finished lines go, one call per line. */

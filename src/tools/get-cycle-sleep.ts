@@ -1,23 +1,16 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
-
-import { fetchCycleSleep, sleepSchema } from "@/api/data/sleeps";
-import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { requireStoredLogin } from "@/auth/tokens/stored-login";
+import { jsonToolResult } from "@/json";
+import { fetchCycleSleep, sleepSchema } from "@/whoop/api/data/sleeps";
+import { withAuthorizedWhoopAccess } from "@/whoop/auth/tokens/authorized";
+import { READ_SCOPES } from "@/whoop/auth/tokens/scopes";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
 
-/**
- * The `get_cycle_sleep` input: the id of the cycle whose sleep to read, named
- * as WHOOP's `GET /v2/cycle/{cycleId}/sleep` names its path parameter, so the
- * argument a model reads in WHOOP's documentation is the argument this tool
- * takes.
- */
-const getCycleSleepInputSchema = z.object({
+const getCycleSleepInputSchema = z.strictObject({
 	cycleId: z.int().describe("The id of the cycle whose sleep to retrieve."),
 });
 
-/** Registers the `get_cycle_sleep` tool on a server instance. */
 export function registerGetCycleSleepTool(server: McpServer): void {
 	server.registerTool(
 		"get_cycle_sleep",
@@ -29,19 +22,15 @@ export function registerGetCycleSleepTool(server: McpServer): void {
 			outputSchema: sleepSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("get_cycle_sleep", async ({ cycleId }) => {
-			const tokens = await requireStoredLogin();
-
-			const sleep = await withValidAccessToken(tokens, (accessToken) =>
-				fetchCycleSleep(accessToken, cycleId),
+		observedTool("get_cycle_sleep", async ({ cycleId }, ctx: ServerContext) => {
+			const sleep = await withAuthorizedWhoopAccess(
+				[READ_SCOPES.sleep],
+				({ accessToken, signal }) =>
+					fetchCycleSleep(accessToken, cycleId, { signal }),
+				{ signal: ctx.mcpReq.signal },
 			);
 
-			return {
-				content: [
-					{ type: "text" as const, text: JSON.stringify(sleep, null, "\t") },
-				],
-				structuredContent: sleep,
-			};
+			return jsonToolResult(sleep);
 		}),
 	);
 }

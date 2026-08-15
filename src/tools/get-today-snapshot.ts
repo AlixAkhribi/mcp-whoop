@@ -1,21 +1,16 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { todaySnapshotSchema } from "@/summaries/snapshot";
-import { answerToday } from "@/summaries/today";
+import { jsonToolResult } from "@/json";
+import {
+	readTodaySnapshot,
+	todaySnapshotSchema,
+} from "@/whoop/reads/today-snapshot";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
 
-/**
- * No input: which day "today" is follows from WHOOP, not from an argument — it
- * is the cycle currently running. Spelled as an empty `z.strictObject(...)` so
- * clients see a well-formed object schema in `tools/list` that takes no
- * properties at all, and an argument sent anyway is refused rather than quietly
- * dropped.
- */
 const getTodaySnapshotInputSchema = z.strictObject({});
 
-/** Registers the `get_today_snapshot` tool on a server instance. */
 export function registerGetTodaySnapshotTool(server: McpServer): void {
 	server.registerTool(
 		"get_today_snapshot",
@@ -27,13 +22,12 @@ export function registerGetTodaySnapshotTool(server: McpServer): void {
 			outputSchema: todaySnapshotSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("get_today_snapshot", async () => {
-			const { snapshot, json } = await answerToday();
+		observedTool("get_today_snapshot", async (_input, ctx: ServerContext) => {
+			const snapshot = await readTodaySnapshot({
+				signal: ctx.mcpReq.signal,
+			});
 
-			return {
-				content: [{ type: "text" as const, text: json }],
-				structuredContent: snapshot,
-			};
+			return jsonToolResult(snapshot);
 		}),
 	);
 }

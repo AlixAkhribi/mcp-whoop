@@ -1,47 +1,14 @@
-import type { McpServer } from "@modelcontextprotocol/server";
-import { z } from "zod";
-
-import { fetchWorkoutPage, workoutPageSchema } from "@/api/data/workouts";
-import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { requireStoredLogin } from "@/auth/tokens/stored-login";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
+import { jsonToolResult } from "@/json";
+import { fetchWorkoutPage, workoutPageSchema } from "@/whoop/api/data/workouts";
+import { withAuthorizedWhoopAccess } from "@/whoop/auth/tokens/authorized";
+import { READ_SCOPES } from "@/whoop/auth/tokens/scopes";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
+import { listInputSchemaFor } from "./list-input";
 import { observedTool } from "./observed";
 
-/**
- * The `list_workouts` input, mirroring the query WHOOP's
- * `GET /v2/activity/workout` documents — same names, same constraints — so the
- * arguments a model reads in WHOOP's documentation are the arguments this tool
- * takes.
- */
-const listWorkoutsInputSchema = z.object({
-	start: z.iso
-		.datetime({ offset: true })
-		.optional()
-		.describe(
-			"Only workouts that occurred during or after (inclusive) this ISO 8601 time.",
-		),
-	end: z.iso
-		.datetime({ offset: true })
-		.optional()
-		.describe(
-			"Only workouts that intersect this ISO 8601 time or ended before (exclusive) it. Defaults to now.",
-		),
-	limit: z
-		.int()
-		.min(1)
-		.max(25)
-		.optional()
-		.describe("How many workouts to return at most (default 10, max 25)."),
-	nextToken: z
-		.string()
-		.min(1)
-		.optional()
-		.describe(
-			"The next_token of the previous page, to get the page after it. Omit for the first page.",
-		),
-});
+const listWorkoutsInputSchema = listInputSchemaFor("workouts");
 
-/** Registers the `list_workouts` tool on a server instance. */
 export function registerListWorkoutsTool(server: McpServer): void {
 	server.registerTool(
 		"list_workouts",
@@ -53,19 +20,15 @@ export function registerListWorkoutsTool(server: McpServer): void {
 			outputSchema: workoutPageSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("list_workouts", async (query) => {
-			const tokens = await requireStoredLogin();
-
-			const page = await withValidAccessToken(tokens, (accessToken) =>
-				fetchWorkoutPage(accessToken, query),
+		observedTool("list_workouts", async (query, ctx: ServerContext) => {
+			const page = await withAuthorizedWhoopAccess(
+				[READ_SCOPES.workout],
+				({ accessToken, signal }) =>
+					fetchWorkoutPage(accessToken, query, { signal }),
+				{ signal: ctx.mcpReq.signal },
 			);
 
-			return {
-				content: [
-					{ type: "text" as const, text: JSON.stringify(page, null, "\t") },
-				],
-				structuredContent: page,
-			};
+			return jsonToolResult(page);
 		}),
 	);
 }
