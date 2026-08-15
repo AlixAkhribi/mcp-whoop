@@ -1,8 +1,8 @@
-import { authorizeEndpoint } from "@/api/client/endpoints";
-import type { WhoopAppCredentials } from "./environment";
+import { authorizeEndpoint } from "@/whoop/api/client/endpoints";
+import type { WhoopAppCredentials } from "./credentials";
 
 /** What the authorize URL is assembled from. */
-export type AuthorizationRequest = {
+type AuthorizationRequest = {
 	/** Environment the endpoint is resolved from. */
 	readonly env: NodeJS.ProcessEnv;
 	/** The application asking for consent. */

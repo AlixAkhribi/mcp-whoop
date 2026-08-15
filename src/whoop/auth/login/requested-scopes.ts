@@ -1,22 +1,4 @@
-/**
- * Every read scope WHOOP defines. Asking for all of them by default is what
- * makes a first login enough for the whole server: a scope not granted at login
- * can only be added by logging in again.
- */
-export const DEFAULT_READ_SCOPES = [
-	"read:profile",
-	"read:body_measurement",
-	"read:cycles",
-	"read:sleep",
-	"read:recovery",
-	"read:workout",
-] as const;
-
-/**
- * The scope that makes WHOOP issue a refresh token. Without it the login would
- * die with the first access token, so it is appended whatever else is asked for.
- */
-export const OFFLINE_SCOPE = "offline";
+import { DEFAULT_READ_SCOPES, OFFLINE_SCOPE } from "@/whoop/auth/tokens/scopes";
 
 /**
  * How `WHOOP_SCOPES` names several scopes: separated by commas, whitespace,

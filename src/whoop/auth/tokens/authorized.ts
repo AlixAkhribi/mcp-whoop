@@ -1,11 +1,16 @@
-import { WhoopUnauthorizedError } from "@/api/client/errors";
-import { InvalidGrantError, refreshTokens } from "@/api/oauth/token-refresh";
+import { WhoopUnauthorizedError } from "@/whoop/api/client/errors";
+import {
+	InvalidGrantError,
+	refreshTokens,
+} from "@/whoop/api/oauth/token-refresh";
+import { requireGrant } from "./granted-scopes";
 import { withStoreLock } from "./lock";
 import {
 	readStoredTokens,
 	type StoredTokens,
 	writeStoredTokens,
 } from "./store";
+import { requireStoredLogin } from "./stored-login";
 
 /**
  * Shown when WHOOP rejects the refresh token itself: the stored login is dead —
@@ -56,7 +61,7 @@ async function refreshAndPersist(
 
 		let rotated: StoredTokens;
 		try {
-			rotated = await refreshTokens(current, env);
+			rotated = await refreshTokens(current, { env });
 		} catch (error) {
 			if (!(error instanceof InvalidGrantError)) {
 				throw error;
@@ -95,7 +100,7 @@ async function refreshAndPersist(
 export async function withValidAccessToken<T>(
 	stored: StoredTokens,
 	use: (accessToken: string) => Promise<T>,
-	env: NodeJS.ProcessEnv = process.env,
+	{ env = process.env }: { env?: NodeJS.ProcessEnv } = {},
 ): Promise<T> {
 	let tokens = stored;
 	if (tokens.expiresAt <= Date.now()) {
@@ -112,4 +117,32 @@ export async function withValidAccessToken<T>(
 
 		return use(tokens.accessToken);
 	}
+}
+
+type AuthorizedWhoopAccess = {
+	readonly accessToken: string;
+	readonly signal?: AbortSignal;
+};
+
+/**
+ * Reads the current login, enforces its current grant, and supplies a valid
+ * access token. Registration-time narrowing remains an advertised-surface
+ * optimization; this is the per-call authorization boundary.
+ */
+export async function withAuthorizedWhoopAccess<T>(
+	requiredScopes: readonly string[],
+	operation: (access: AuthorizedWhoopAccess) => Promise<T>,
+	{
+		env = process.env,
+		signal,
+	}: { env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {},
+): Promise<T> {
+	const tokens = await requireStoredLogin({ env });
+	requireGrant(tokens.scopes, ...requiredScopes);
+
+	return withValidAccessToken(
+		tokens,
+		(accessToken) => operation({ accessToken, signal }),
+		{ env },
+	);
 }

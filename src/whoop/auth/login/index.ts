@@ -1,13 +1,17 @@
 import { randomBytes } from "node:crypto";
-import { type StoredTokens, writeStoredTokens } from "@/auth/tokens/store";
 import { redactSecrets } from "@/lib/redaction";
+import { exchangeAuthorizationCode } from "@/whoop/api/oauth/token-exchange";
+import {
+	type StoredTokens,
+	writeStoredTokens,
+} from "@/whoop/auth/tokens/store";
 import { buildAuthorizeUrl } from "./authorize-url";
 import { openInBrowser } from "./browser";
 import {
 	missingCredentialVariables,
 	readCredentials,
 	type WhoopAppCredentials,
-} from "./environment";
+} from "./credentials";
 import {
 	listenForRedirect,
 	type RedirectCapture,
@@ -15,7 +19,6 @@ import {
 } from "./redirect-listener";
 import { readPastedRedirect } from "./redirect-paste";
 import { requestedScopes } from "./requested-scopes";
-import { exchangeAuthorizationCode } from "./token-exchange";
 
 /** Where a user registers the WHOOP application these credentials come from. */
 const DEVELOPER_DASHBOARD = "https://developer-dashboard.whoop.com";
@@ -25,7 +28,7 @@ const DEVELOPER_DASHBOARD = "https://developer-dashboard.whoop.com";
  * to the real thing; passing explicit ones keeps a run from opening a browser
  * or writing to the console.
  */
-export type LoginRuntime = {
+type LoginRuntime = {
 	/** Environment the application and the store location come from. */
 	readonly env?: NodeJS.ProcessEnv;
 	/** Where the command's own output goes. */

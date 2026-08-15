@@ -4,7 +4,7 @@ import type { RedirectCapture } from "./redirect-listener";
 import { type CapturedRedirect, classifyRedirect } from "./redirect-query";
 
 /** What reading a pasted redirect needs in order to trust what arrives. */
-export type PastedRedirectExpectation = {
+type PastedRedirectExpectation = {
 	/** Where the line the user pastes is read from. */
 	readonly input: NodeJS.ReadableStream;
 	/** The anti-forgery value this login issued. */
