@@ -1,6 +1,6 @@
 {
 	"name": "mcp-whoop",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"description": "Model Context Protocol (MCP) server for WHOOP, served over stdio",
 	"keywords": [
 		"mcp",
@@ -11,6 +11,7 @@
 	],
 	"license": "MIT",
 	"type": "module",
+	"packageManager": "pnpm@11.17.0",
 	"engines": {
 		"node": "^22.22.1 || >=24.10.0"
 	},
@@ -29,14 +30,16 @@
 		"provenance": true
 	},
 	"scripts": {
-		"prepare": "husky || true",
+		"prepare": "node scripts/prepare.mjs",
+		"prepack": "npm run build",
 		"build": "tsdown",
 		"typecheck": "tsc --noEmit",
 		"check": "biome check .",
 		"fix": "biome check --write .",
-		"test": "vitest run",
-		"inspect": "pnpm dlx @modelcontextprotocol/inspector --web tsx src/index.ts",
-		"inspect:cli": "pnpm dlx @modelcontextprotocol/inspector --cli tsx src/index.ts"
+		"test": "vitest run --exclude \"tests/package/**\"",
+		"test:package": "vitest run tests/package",
+		"inspect": "pnpm dlx @modelcontextprotocol/inspector@2.2.0 --web tsx src/index.ts",
+		"inspect:cli": "pnpm dlx @modelcontextprotocol/inspector@2.2.0 --cli tsx src/index.ts"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/server": "^2.0.0",
@@ -49,7 +52,7 @@
 		"@modelcontextprotocol/client": "^2.0.0",
 		"@semantic-release/changelog": "^7.0.0",
 		"@semantic-release/git": "^11.0.1",
-		"@types/node": "^26.2.0",
+		"@types/node": "^22.20.1",
 		"husky": "^9.1.7",
 		"lint-staged": "^17.3.0",
 		"semantic-release": "^25.0.9",

@@ -24,9 +24,7 @@ jobs:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
-        with:
-          # The major that wrote `pnpm-lock.yaml` (lockfileVersion 9.0).
-          version: 11
+        # Reads the exact version from package.json#packageManager.
 
       - uses: actions/setup-node@v7
         with:
@@ -49,6 +47,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Installs the packed tarball into a throwaway consumer. The install uses
+      # --prefer-offline but may access the registry, so it is an explicit gate.
+      - name: Package smoke test
+        run: pnpm test:package
 
       # A rebase merge lands every commit of the PR on main individually, so
       # each one has to satisfy the convention on its own — linting just the PR

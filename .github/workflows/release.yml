@@ -9,6 +9,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   # semantic-release pushes the `v${version}` tag, @semantic-release/github
   # creates the release that hangs from it, and @semantic-release/git pushes
@@ -60,9 +64,7 @@ jobs:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
-        with:
-          # The major that wrote `pnpm-lock.yaml` (lockfileVersion 9.0).
-          version: 11
+        # Reads the exact version from package.json#packageManager.
 
       - uses: actions/setup-node@v7
         with:
@@ -79,7 +81,7 @@ jobs:
       # meaningful: the build still has to work on the oldest Node the package
       # claims to support.
       - name: Use an npm that can publish over OIDC
-        run: npm install --global npm@11
+        run: npm install --global npm@11.5.1
 
       - run: pnpm install --frozen-lockfile
 
@@ -91,11 +93,16 @@ jobs:
       - name: Lint and format
         run: pnpm check
 
-      # `files: ["dist"]` makes the tarball whatever `dist/` holds when npm
-      # packs it, and `dist/` is gitignored. No `prepack` hook builds it, so
-      # skipping this step would publish an empty package.
+      - name: Test
+        run: pnpm test
+
+      # Keep an explicit build gate even though prepack also rebuilds the
+      # artifact immediately before npm creates the tarball.
       - name: Build
         run: pnpm build
+
+      - name: Package smoke test
+        run: pnpm test:package
 
       - name: Release
         env:
