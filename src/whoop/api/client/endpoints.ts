@@ -1,5 +1,4 @@
-/** WHOOP's API origin unless `WHOOP_API_BASE_URL` points elsewhere. */
-export const DEFAULT_API_BASE_URL = "https://api.prod.whoop.com";
+const DEFAULT_API_BASE_URL = "https://api.prod.whoop.com";
 
 /**
  * The origin every WHOOP request goes to, authorization and data alike, so a
@@ -12,12 +11,10 @@ export function whoopApiBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
 	);
 }
 
-/** Where the user grants or refuses this application consent. */
 export function authorizeEndpoint(env: NodeJS.ProcessEnv = process.env): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/oauth/oauth2/auth`);
 }
 
-/** Where an authorization code is traded for tokens. */
 export function tokenEndpoint(env: NodeJS.ProcessEnv = process.env): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/oauth/oauth2/token`);
 }
@@ -30,21 +27,18 @@ export function profileEndpoint(env: NodeJS.ProcessEnv = process.env): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/user/profile/basic`);
 }
 
-/** Where the logged-in user's body measurements are read. */
-export function bodyMeasurementEndpoint(
+export function bodyMeasurementsEndpoint(
 	env: NodeJS.ProcessEnv = process.env,
 ): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/user/measurement/body`);
 }
 
-/** Where the logged-in user's physiological cycles are listed, paginated. */
 export function cycleCollectionEndpoint(
 	env: NodeJS.ProcessEnv = process.env,
 ): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/cycle`);
 }
 
-/** Where one physiological cycle is read by its id. */
 export function cycleEndpoint(
 	cycleId: number,
 	env: NodeJS.ProcessEnv = process.env,
@@ -52,7 +46,6 @@ export function cycleEndpoint(
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/cycle/${cycleId}`);
 }
 
-/** Where the recovery scored for one physiological cycle is read. */
 export function cycleRecoveryEndpoint(
 	cycleId: number,
 	env: NodeJS.ProcessEnv = process.env,
@@ -62,7 +55,6 @@ export function cycleRecoveryEndpoint(
 	);
 }
 
-/** Where the sleep that started one physiological cycle is read. */
 export function cycleSleepEndpoint(
 	cycleId: number,
 	env: NodeJS.ProcessEnv = process.env,
@@ -70,14 +62,12 @@ export function cycleSleepEndpoint(
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/cycle/${cycleId}/sleep`);
 }
 
-/** Where the logged-in user's sleeps are listed, paginated. */
 export function sleepCollectionEndpoint(
 	env: NodeJS.ProcessEnv = process.env,
 ): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/activity/sleep`);
 }
 
-/** Where one sleep is read by its id. */
 export function sleepEndpoint(
 	sleepId: string,
 	env: NodeJS.ProcessEnv = process.env,
@@ -87,14 +77,12 @@ export function sleepEndpoint(
 	);
 }
 
-/** Where the logged-in user's workouts are listed, paginated. */
 export function workoutCollectionEndpoint(
 	env: NodeJS.ProcessEnv = process.env,
 ): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/activity/workout`);
 }
 
-/** Where one workout is read by its id. */
 export function workoutEndpoint(
 	workoutId: string,
 	env: NodeJS.ProcessEnv = process.env,
@@ -104,14 +92,12 @@ export function workoutEndpoint(
 	);
 }
 
-/** Where the logged-in user's recoveries are listed, paginated. */
 export function recoveryCollectionEndpoint(
 	env: NodeJS.ProcessEnv = process.env,
 ): URL {
 	return new URL(`${whoopApiBaseUrl(env)}/developer/v2/recovery`);
 }
 
-/** Where a login's granted access is revoked, by DELETEing it. */
 export function revokeAccessEndpoint(
 	env: NodeJS.ProcessEnv = process.env,
 ): URL {

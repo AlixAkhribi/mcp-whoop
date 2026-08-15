@@ -7,5 +7,16 @@
 export class WhoopUnauthorizedError extends Error {
 	constructor() {
 		super("WHOOP rejected the access token (HTTP 401)");
+		this.name = "WhoopUnauthorizedError";
+	}
+}
+
+/** WHOOP did not complete a request inside the configured transport bound. */
+export class WhoopTimeoutError extends Error {
+	constructor(operation: string) {
+		super(
+			`WHOOP timed out while handling ${operation}. It is safe to retry once the connection is healthy.`,
+		);
+		this.name = "WhoopTimeoutError";
 	}
 }
