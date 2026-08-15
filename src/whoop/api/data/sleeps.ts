@@ -4,9 +4,13 @@ import {
 	cycleSleepEndpoint,
 	sleepCollectionEndpoint,
 	sleepEndpoint,
-} from "@/api/client/endpoints";
-import { WhoopUnauthorizedError } from "@/api/client/errors";
-import { classifiedWhoopFailure, whoopFetch } from "@/api/client/http";
+} from "@/whoop/api/client/endpoints";
+import {
+	readWhoopJson,
+	readWhoopJsonOrAbsent,
+	type WhoopPageQuery,
+} from "@/whoop/api/client/read";
+import { whoopPageSchema, whoopScoreStateSchema } from "./common";
 
 /**
  * WHOOP's v2 `Sleep` record, in WHOOP's own field names — a night or, when
@@ -41,7 +45,7 @@ export const sleepSchema = z.object({
 	end: z.string(),
 	timezone_offset: z.string(),
 	nap: z.boolean(),
-	score_state: z.enum(["SCORED", "PENDING_SCORE", "UNSCORABLE"]),
+	score_state: whoopScoreStateSchema,
 	score: z
 		.object({
 			stage_summary: z.object({
@@ -75,110 +79,41 @@ export type WhoopSleep = z.infer<typeof sleepSchema>;
  * that reaches the page after them. The last page carries `next_token: null` —
  * an explicit null (observed 2026-08-02), not an absent field.
  */
-export const sleepPageSchema = z.object({
-	records: z.array(sleepSchema),
-	next_token: z.string().nullish(),
-});
+export const sleepPageSchema = whoopPageSchema(sleepSchema);
 
-export type WhoopSleepPage = z.infer<typeof sleepPageSchema>;
+type WhoopSleepPage = z.infer<typeof sleepPageSchema>;
 
-/**
- * The query WHOOP's `GET /v2/activity/sleep` documents, in its own parameter
- * names: `start`/`end` bound the range as ISO 8601 strings, `limit` caps the
- * page, and `nextToken` — the `next_token` of the previous page, camel-cased on
- * the way in per WHOOP's OpenAPI document — continues the collection.
- */
-export type SleepPageQuery = {
-	start?: string;
-	end?: string;
-	limit?: number;
-	nextToken?: string;
-};
-
-/** Reads one page of the sleeps of the user the access token belongs to. */
-export async function fetchSleepPage(
+export function fetchSleepPage(
 	accessToken: string,
-	query: SleepPageQuery = {},
-	env: NodeJS.ProcessEnv = process.env,
-	signal?: AbortSignal,
+	query: WhoopPageQuery = {},
+	options: { env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {},
 ): Promise<WhoopSleepPage> {
-	const endpoint = sleepCollectionEndpoint(env);
-	// Relayed verbatim, under WHOOP's own parameter names, so the arguments a
-	// model reads in WHOOP's documentation are the ones that go over the wire.
-	for (const [name, value] of Object.entries(query)) {
-		if (value !== undefined) {
-			endpoint.searchParams.set(name, String(value));
-		}
-	}
-
-	const response = await whoopFetch("the sleeps read", endpoint, {
-		headers: {
-			authorization: `Bearer ${accessToken}`,
-			accept: "application/json",
-		},
-		signal,
+	return readWhoopJson({
+		operation: "the sleeps read",
+		endpoint: sleepCollectionEndpoint(options.env),
+		accessToken,
+		schema: sleepPageSchema,
+		query,
+		...options,
 	});
-	if (response.status === 401) {
-		throw new WhoopUnauthorizedError();
-	}
-	if (!response.ok) {
-		throw classifiedWhoopFailure(
-			"the sleeps read",
-			response,
-			await response.text(),
-		);
-	}
-
-	const parsed = sleepPageSchema.safeParse(
-		await response.json().catch(() => undefined),
-	);
-	if (!parsed.success) {
-		throw new Error("WHOOP answered the sleeps read with an unexpected body");
-	}
-
-	return parsed.data;
 }
 
-/** Reads one sleep by id, for the user the access token belongs to. */
-export async function fetchSleep(
+export function fetchSleep(
 	accessToken: string,
 	sleepId: string,
-	env: NodeJS.ProcessEnv = process.env,
+	options: { env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {},
 ): Promise<WhoopSleep> {
-	const response = await whoopFetch(
-		"the sleep read",
-		sleepEndpoint(sleepId, env),
-		{
-			headers: {
-				authorization: `Bearer ${accessToken}`,
-				accept: "application/json",
-			},
-		},
-	);
-	if (response.status === 401) {
-		throw new WhoopUnauthorizedError();
-	}
-	// WHOOP's answer for an id this user has no sleep for. Said plainly, naming
-	// the id, and without offering a retry: the same request will keep 404ing.
-	if (response.status === 404) {
-		throw new Error(`Sleep ${sleepId} was not found on WHOOP.`);
-	}
-	if (!response.ok) {
-		throw classifiedWhoopFailure(
-			"the sleep read",
-			response,
-			await response.text(),
-		);
-	}
-
-	const parsed = sleepSchema.safeParse(
-		await response.json().catch(() => undefined),
-	);
-	if (!parsed.success) {
-		throw new Error("WHOOP answered the sleep read with an unexpected body");
-	}
-
-	return parsed.data;
+	return readWhoopJson({
+		operation: "the sleep read",
+		endpoint: sleepEndpoint(sleepId, options.env),
+		accessToken,
+		schema: sleepSchema,
+		...options,
+		// WHOOP's answer for an id this user has no sleep for. Said plainly,
+		// naming the id, and without offering a retry: the same request will
+		// keep 404ing.
+		notFound: () => new Error(`Sleep ${sleepId} was not found on WHOOP.`),
+	});
 }
 
 /**
@@ -190,49 +125,20 @@ export async function fetchSleep(
  * day — "no sleep recorded" — rather than a failed read, so it comes back as
  * `null` instead of as an error.
  */
-export async function fetchCycleSleepOrAbsent(
+export function fetchCycleSleepOrAbsent(
 	accessToken: string,
 	cycleId: number,
-	env: NodeJS.ProcessEnv = process.env,
-	signal?: AbortSignal,
+	options: { env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {},
 ): Promise<WhoopSleep | null> {
-	const response = await whoopFetch(
-		"the cycle sleep read",
-		cycleSleepEndpoint(cycleId, env),
-		{
-			headers: {
-				authorization: `Bearer ${accessToken}`,
-				accept: "application/json",
-			},
-			signal,
-		},
-	);
-	if (response.status === 401) {
-		throw new WhoopUnauthorizedError();
-	}
-	// WHOOP's answer for a cycle it has recorded no sleep for — the same answer
-	// it gives for a cycle this user does not have.
-	if (response.status === 404) {
-		return null;
-	}
-	if (!response.ok) {
-		throw classifiedWhoopFailure(
-			"the cycle sleep read",
-			response,
-			await response.text(),
-		);
-	}
-
-	const parsed = sleepSchema.safeParse(
-		await response.json().catch(() => undefined),
-	);
-	if (!parsed.success) {
-		throw new Error(
-			"WHOOP answered the cycle sleep read with an unexpected body",
-		);
-	}
-
-	return parsed.data;
+	// A 404 is WHOOP's answer for a cycle it has recorded no sleep for — the
+	// same answer it gives for a cycle this user does not have.
+	return readWhoopJsonOrAbsent({
+		operation: "the cycle sleep read",
+		endpoint: cycleSleepEndpoint(cycleId, options.env),
+		accessToken,
+		schema: sleepSchema,
+		...options,
+	});
 }
 
 /**
@@ -248,9 +154,9 @@ export async function fetchCycleSleepOrAbsent(
 export async function fetchCycleSleep(
 	accessToken: string,
 	cycleId: number,
-	env: NodeJS.ProcessEnv = process.env,
+	options: { env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {},
 ): Promise<WhoopSleep> {
-	const sleep = await fetchCycleSleepOrAbsent(accessToken, cycleId, env);
+	const sleep = await fetchCycleSleepOrAbsent(accessToken, cycleId, options);
 	if (sleep === null) {
 		throw new Error(
 			`No sleep was found for cycle ${cycleId} on WHOOP — that cycle has no sleep yet.`,
