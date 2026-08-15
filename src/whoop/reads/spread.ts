@@ -13,12 +13,12 @@ export const spreadSchema = z.object({
 export type Spread = z.infer<typeof spreadSchema>;
 
 /** Means read to the hundredth; the readings themselves read as WHOOP sent. */
-export function toHundredths(value: number): number {
+export function roundToHundredths(value: number): number {
 	return Math.round(value * 100) / 100;
 }
 
 /** The mean, low and high of the values present, the mean rounded as asked. */
-export function spreadOf(
+export function calculateSpread(
 	values: readonly number[],
 	round: (value: number) => number,
 ): Spread {
