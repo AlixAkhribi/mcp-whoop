@@ -1,11 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 
-import { BODY_MEASUREMENT_SCOPES } from "@/answers/body-measurements";
-import { PROFILE_SCOPES } from "@/answers/profile";
-import { grantAllows } from "@/auth/tokens/granted-scopes";
-import { RECOVERY_SUMMARY_SCOPES } from "@/summaries/recovery";
-import { SLEEP_SUMMARY_SCOPES } from "@/summaries/sleep";
-import { TODAY_SNAPSHOT_SCOPES } from "@/summaries/today";
+import { grantAllows } from "@/whoop/auth/tokens/granted-scopes";
+import {
+	BODY_MEASUREMENTS_SCOPES,
+	PROFILE_SCOPES,
+	READ_SCOPES,
+	RECOVERY_SUMMARY_SCOPES,
+	SLEEP_SUMMARY_SCOPES,
+	TODAY_SNAPSHOT_SCOPES,
+} from "@/whoop/auth/tokens/scopes";
 import { registerGetBodyMeasurementsTool } from "./get-body-measurements";
 import { registerGetCycleTool } from "./get-cycle";
 import { registerGetCycleRecoveryTool } from "./get-cycle-recovery";
@@ -46,14 +49,14 @@ export function registerTools(
 	}
 	// The same scope a read of the `whoop://body-measurements` resource demands
 	// when it runs.
-	if (grantAllows(grantedScopes, ...BODY_MEASUREMENT_SCOPES)) {
+	if (grantAllows(grantedScopes, ...BODY_MEASUREMENTS_SCOPES)) {
 		registerGetBodyMeasurementsTool(server);
 	}
-	if (grantAllows(grantedScopes, "read:cycles")) {
+	if (grantAllows(grantedScopes, READ_SCOPES.cycles)) {
 		registerListCyclesTool(server);
 		registerGetCycleTool(server);
 	}
-	if (grantAllows(grantedScopes, "read:sleep")) {
+	if (grantAllows(grantedScopes, READ_SCOPES.sleep)) {
 		registerListSleepsTool(server);
 		registerGetSleepTool(server);
 		// WHOOP declares no scope for GET /v2/cycle/{cycleId}/sleep — `security`
@@ -62,11 +65,11 @@ export function registerTools(
 		// would have named.
 		registerGetCycleSleepTool(server);
 	}
-	if (grantAllows(grantedScopes, "read:recovery")) {
+	if (grantAllows(grantedScopes, READ_SCOPES.recovery)) {
 		registerListRecoveriesTool(server);
 		registerGetCycleRecoveryTool(server);
 	}
-	if (grantAllows(grantedScopes, "read:workout")) {
+	if (grantAllows(grantedScopes, READ_SCOPES.workout)) {
 		registerListWorkoutsTool(server);
 		registerGetWorkoutTool(server);
 	}

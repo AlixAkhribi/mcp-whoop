@@ -1,24 +1,17 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { jsonToolResult } from "@/json";
 import {
-	answerRecoverySummary,
 	RECOVERY_SUMMARY_DEFAULT_DAYS,
 	RECOVERY_SUMMARY_MAX_DAYS,
+	readRecoverySummary,
 	recoverySummarySchema,
-} from "@/summaries/recovery";
+} from "@/whoop/reads/recovery-summary";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
 
-/**
- * The `get_recovery_summary` input: a count of the most recent days, never a
- * pair of instants. The bounds live in the integer itself, so a call outside
- * them is refused by the advertised schema before anything is asked of WHOOP.
- *
- * The default is the shared path's own, not a number repeated here: a call that
- * names no days and a read of `whoop://recovery/last-week` are the same week.
- */
-const getRecoverySummaryInputSchema = z.object({
+const getRecoverySummaryInputSchema = z.strictObject({
 	days: z
 		.int()
 		.min(1)
@@ -29,7 +22,6 @@ const getRecoverySummaryInputSchema = z.object({
 		),
 });
 
-/** Registers the `get_recovery_summary` tool on a server instance. */
 export function registerGetRecoverySummaryTool(server: McpServer): void {
 	server.registerTool(
 		"get_recovery_summary",
@@ -41,13 +33,16 @@ export function registerGetRecoverySummaryTool(server: McpServer): void {
 			outputSchema: recoverySummarySchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("get_recovery_summary", async ({ days }) => {
-			const { summary, json } = await answerRecoverySummary(days);
+		observedTool(
+			"get_recovery_summary",
+			async ({ days }, ctx: ServerContext) => {
+				const summary = await readRecoverySummary({
+					days,
+					signal: ctx.mcpReq.signal,
+				});
 
-			return {
-				content: [{ type: "text" as const, text: json }],
-				structuredContent: summary,
-			};
-		}),
+				return jsonToolResult(summary);
+			},
+		),
 	);
 }

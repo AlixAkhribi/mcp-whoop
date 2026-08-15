@@ -11,13 +11,14 @@
  * surface's failures can be scrubbed. One scrub, one narration, no drift.
  */
 
-import { log } from "@/lib/log";
-import { describeRedacted } from "@/lib/redaction";
+import { isCancellation } from "./cancellation";
+import { log } from "./log";
+import { describeRedacted } from "./redaction";
 
 /** How a call is spoken about on stderr. */
-export type ObservedCall = {
+type ObservedCall = {
 	/** What the outcome lines name: a tool's name, a resource's URI. */
-	readonly what: string;
+	readonly operation: string;
 	/** The line written when the call starts, in its surface's own words. */
 	readonly announce: string;
 };
@@ -35,7 +36,7 @@ export type ObservedCall = {
  * state worth a second seam here.
  */
 export function observed<A extends unknown[], R>(
-	{ what, announce }: ObservedCall,
+	{ operation, announce }: ObservedCall,
 	handler: (...args: A) => Promise<R>,
 ): (...args: A) => Promise<R> {
 	return async (...args) => {
@@ -44,14 +45,20 @@ export function observed<A extends unknown[], R>(
 		try {
 			const result = await handler(...args);
 			log.info(
-				`${what} answered in ${Math.round(performance.now() - started)}ms`,
+				`${operation} answered in ${Math.round(performance.now() - started)}ms`,
 			);
 
 			return result;
 		} catch (error) {
 			const message = describeRedacted(error);
+			if (isCancellation(error)) {
+				log.debug(
+					`${operation} cancelled after ${Math.round(performance.now() - started)}ms: ${message}`,
+				);
+				throw error;
+			}
 			log.error(
-				`${what} failed after ${Math.round(performance.now() - started)}ms: ${message}`,
+				`${operation} failed after ${Math.round(performance.now() - started)}ms: ${message}`,
 			);
 			throw new Error(message);
 		}

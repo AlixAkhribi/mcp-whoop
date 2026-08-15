@@ -1,23 +1,16 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
-
-import { fetchWorkout, workoutSchema } from "@/api/data/workouts";
-import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { requireStoredLogin } from "@/auth/tokens/stored-login";
+import { jsonToolResult } from "@/json";
+import { fetchWorkout, workoutSchema } from "@/whoop/api/data/workouts";
+import { withAuthorizedWhoopAccess } from "@/whoop/auth/tokens/authorized";
+import { READ_SCOPES } from "@/whoop/auth/tokens/scopes";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
 
-/**
- * The `get_workout` input: the id of the workout to read, named as WHOOP's
- * `GET /v2/activity/workout/{workoutId}` names its path parameter, so the
- * argument a model reads in WHOOP's documentation is the argument this tool
- * takes. v2 keys a workout by a UUID string, not by the integer v1 used.
- */
-const getWorkoutInputSchema = z.object({
+const getWorkoutInputSchema = z.strictObject({
 	workoutId: z.uuid().describe("The UUID of the workout to retrieve."),
 });
 
-/** Registers the `get_workout` tool on a server instance. */
 export function registerGetWorkoutTool(server: McpServer): void {
 	server.registerTool(
 		"get_workout",
@@ -29,19 +22,15 @@ export function registerGetWorkoutTool(server: McpServer): void {
 			outputSchema: workoutSchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("get_workout", async ({ workoutId }) => {
-			const tokens = await requireStoredLogin();
-
-			const workout = await withValidAccessToken(tokens, (accessToken) =>
-				fetchWorkout(accessToken, workoutId),
+		observedTool("get_workout", async ({ workoutId }, ctx: ServerContext) => {
+			const workout = await withAuthorizedWhoopAccess(
+				[READ_SCOPES.workout],
+				({ accessToken, signal }) =>
+					fetchWorkout(accessToken, workoutId, { signal }),
+				{ signal: ctx.mcpReq.signal },
 			);
 
-			return {
-				content: [
-					{ type: "text" as const, text: JSON.stringify(workout, null, "\t") },
-				],
-				structuredContent: workout,
-			};
+			return jsonToolResult(workout);
 		}),
 	);
 }

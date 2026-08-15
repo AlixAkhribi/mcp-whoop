@@ -1,23 +1,19 @@
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
-
-import { fetchCycleRecovery, recoverySchema } from "@/api/data/recoveries";
-import { withValidAccessToken } from "@/auth/tokens/authorized";
-import { requireStoredLogin } from "@/auth/tokens/stored-login";
+import { jsonToolResult } from "@/json";
+import {
+	fetchCycleRecovery,
+	recoverySchema,
+} from "@/whoop/api/data/recoveries";
+import { withAuthorizedWhoopAccess } from "@/whoop/auth/tokens/authorized";
+import { READ_SCOPES } from "@/whoop/auth/tokens/scopes";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "./annotations";
 import { observedTool } from "./observed";
 
-/**
- * The `get_cycle_recovery` input: the id of the cycle whose recovery to read,
- * named as WHOOP's `GET /v2/cycle/{cycleId}/recovery` names its path parameter,
- * so the argument a model reads in WHOOP's documentation is the argument this
- * tool takes.
- */
-const getCycleRecoveryInputSchema = z.object({
+const getCycleRecoveryInputSchema = z.strictObject({
 	cycleId: z.int().describe("The id of the cycle whose recovery to retrieve."),
 });
 
-/** Registers the `get_cycle_recovery` tool on a server instance. */
 export function registerGetCycleRecoveryTool(server: McpServer): void {
 	server.registerTool(
 		"get_cycle_recovery",
@@ -29,19 +25,18 @@ export function registerGetCycleRecoveryTool(server: McpServer): void {
 			outputSchema: recoverySchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,
 		},
-		observedTool("get_cycle_recovery", async ({ cycleId }) => {
-			const tokens = await requireStoredLogin();
+		observedTool(
+			"get_cycle_recovery",
+			async ({ cycleId }, ctx: ServerContext) => {
+				const recovery = await withAuthorizedWhoopAccess(
+					[READ_SCOPES.recovery],
+					({ accessToken, signal }) =>
+						fetchCycleRecovery(accessToken, cycleId, { signal }),
+					{ signal: ctx.mcpReq.signal },
+				);
 
-			const recovery = await withValidAccessToken(tokens, (accessToken) =>
-				fetchCycleRecovery(accessToken, cycleId),
-			);
-
-			return {
-				content: [
-					{ type: "text" as const, text: JSON.stringify(recovery, null, "\t") },
-				],
-				structuredContent: recovery,
-			};
-		}),
+				return jsonToolResult(recovery);
+			},
+		),
 	);
 }

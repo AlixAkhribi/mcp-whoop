@@ -87,12 +87,12 @@ async function run(): Promise<void> {
 			await import("@/transports/stdio");
 			break;
 		case "login": {
-			const { runLogin } = await import("@/auth/login");
+			const { runLogin } = await import("@/whoop/auth/login");
 			process.exitCode = await runLogin();
 			break;
 		}
 		case "logout": {
-			const { runLogout } = await import("@/auth/logout");
+			const { runLogout } = await import("@/whoop/auth/logout");
 			process.exitCode = await runLogout();
 			break;
 		}

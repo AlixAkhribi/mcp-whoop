@@ -4,11 +4,10 @@ import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-
-import { grantedScopes } from "@/auth/tokens/granted-scopes";
 import { log } from "@/lib/log";
 import { registerResources } from "@/resources";
 import { registerTools } from "@/tools";
+import { grantedScopes } from "@/whoop/auth/tokens/granted-scopes";
 
 /** The manifest fields this server reports as its MCP identity. */
 const manifestSchema = z.object({
@@ -48,7 +47,7 @@ export const manifest = manifestSchema.parse(
  * How long a client may reuse a listing of what this server serves: one hour,
  * for the tools and the resources alike.
  *
- * The resource listing is the same five entries for every login — the grant
+ * The resource listing is the same for every login — the grant
  * gates reads, not listings — so any lifetime is honest there. The tool
  * listing follows the grant read when the serving process starts, and its
  * registrations hold still for that process's life; a cached copy can
@@ -73,7 +72,7 @@ const LIST_TTL_MS = 3_600_000;
  *
  * Both listings are cacheable but never shareable, so they are scoped
  * `private` — the value the 2026-07-28 revision requires beside the lifetime.
- * (The resource listing is the same five entries for every login and could
+ * (The resource listing is the same for every login and could
  * call itself `public`; `private` claims less, costs a stdio client nothing,
  * and keeps the two listings on one policy.)
  *
@@ -103,7 +102,7 @@ export async function createServer(): Promise<McpServer> {
 	const scopes = await grantedScopes();
 	// The one line that answers "why is a tool missing": the tool surface is a
 	// function of the stored grant, and nothing else says which grant this
-	// serving unit read. The resources are always all five — a read a grant
+	// serving unit read. The resources are always present — a read a grant
 	// does not permit says so itself, naming the scopes it is missing.
 	log.debug(
 		scopes
