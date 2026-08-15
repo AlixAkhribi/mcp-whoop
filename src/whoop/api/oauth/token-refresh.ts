@@ -1,12 +1,16 @@
-import { tokenEndpoint } from "@/api/client/endpoints";
+import { log } from "@/lib/log";
+import { registerSecrets } from "@/lib/redaction";
+import { tokenEndpoint } from "@/whoop/api/client/endpoints";
 import {
 	classifiedWhoopFailure,
 	isRetryableStatus,
 	whoopFetch,
-} from "@/api/client/http";
-import type { StoredApplication, StoredTokens } from "@/auth/tokens/store";
-import { log } from "@/lib/log";
-import { registerSecrets } from "@/lib/redaction";
+} from "@/whoop/api/client/http";
+import { OFFLINE_SCOPE } from "@/whoop/auth/tokens/scopes";
+import type {
+	StoredApplication,
+	StoredTokens,
+} from "@/whoop/auth/tokens/store";
 import {
 	oauthErrorSchema,
 	parseJson,
@@ -62,7 +66,7 @@ function refreshApplication(
  */
 export async function refreshTokens(
 	stored: StoredTokens,
-	env: NodeJS.ProcessEnv = process.env,
+	{ env = process.env }: { env?: NodeJS.ProcessEnv } = {},
 ): Promise<StoredTokens> {
 	const application = refreshApplication(stored, env);
 	if (!application) {
@@ -72,7 +76,10 @@ export async function refreshTokens(
 	registerSecrets(application.clientSecret);
 
 	log.debug("asking WHOOP to refresh the access token");
-	const response = await whoopFetch("the token refresh", tokenEndpoint(env), {
+	const response = await whoopFetch({
+		operation: "the token refresh",
+		url: tokenEndpoint(env),
+		env,
 		method: "POST",
 		headers: {
 			"content-type": "application/x-www-form-urlencoded",
@@ -83,7 +90,7 @@ export async function refreshTokens(
 			refresh_token: stored.refreshToken,
 			client_id: application.clientId,
 			client_secret: application.clientSecret,
-			scope: "offline",
+			scope: OFFLINE_SCOPE,
 		}),
 	});
 

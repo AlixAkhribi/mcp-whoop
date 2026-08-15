@@ -1,4 +1,8 @@
-import { readStoredTokens, type StoredTokens } from "./store";
+import {
+	readStoredTokens,
+	type StoredTokens,
+	type TokenStoreLocation,
+} from "./store";
 
 /**
  * Shown when the server has never been logged in. It names the out-of-band
@@ -24,8 +28,10 @@ const STORE_UNREADABLE =
  * that names the login command — the shared failure mode of everything this
  * server serves.
  */
-export async function requireStoredLogin(): Promise<StoredTokens> {
-	const tokens = await readStoredTokens().catch(() => {
+export async function requireStoredLogin(
+	location: TokenStoreLocation = {},
+): Promise<StoredTokens> {
+	const tokens = await readStoredTokens(location).catch(() => {
 		throw new Error(STORE_UNREADABLE);
 	});
 	if (!tokens) {

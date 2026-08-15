@@ -1,12 +1,17 @@
-import { tokenEndpoint } from "@/api/client/endpoints";
+import { redactedExcerpt, registerSecrets } from "@/lib/redaction";
+import { tokenEndpoint } from "@/whoop/api/client/endpoints";
+import {
+	classifiedWhoopFailure,
+	isRetryableStatus,
+	whoopFetch,
+} from "@/whoop/api/client/http";
 import {
 	oauthErrorSchema,
 	parseJson,
 	storedTokensFromResponse,
-} from "@/api/oauth/token-response";
-import type { StoredTokens } from "@/auth/tokens/store";
-import { redactedExcerpt, registerSecrets } from "@/lib/redaction";
-import type { WhoopAppCredentials } from "./environment";
+} from "@/whoop/api/oauth/token-response";
+import type { WhoopAppCredentials } from "@/whoop/auth/login/credentials";
+import type { StoredTokens } from "@/whoop/auth/tokens/store";
 
 /**
  * A rejected exchange, phrased so the user can act on it. WHOOP's own OAuth
@@ -21,13 +26,15 @@ function rejection(status: number, payload: unknown): string {
 	}
 
 	const { error, error_description: description } = failure.data;
-	const said = description ? `: ${redactedExcerpt(description)}` : "";
+	const upstreamMessage = description
+		? `: ${redactedExcerpt(description)}`
+		: "";
 
-	return `the token exchange failed (${redactedExcerpt(error)}${said})`;
+	return `the token exchange failed (${redactedExcerpt(error)}${upstreamMessage})`;
 }
 
 /** What the login command has to hand to trade a code for tokens. */
-export type CodeExchange = {
+type CodeExchange = {
 	/** Environment the endpoint is resolved from. */
 	readonly env: NodeJS.ProcessEnv;
 	/** The application the code was issued to. */
@@ -54,9 +61,11 @@ export async function exchangeAuthorizationCode({
 }: CodeExchange): Promise<StoredTokens> {
 	// The code is a single-use credential until this exchange spends it, and a
 	// rejected exchange is exactly when WHOOP's error body may echo it back.
-	registerSecrets(code);
-
-	const response = await fetch(tokenEndpoint(env), {
+	registerSecrets(code, app.clientSecret);
+	const response = await whoopFetch({
+		operation: "the token exchange",
+		url: tokenEndpoint(env),
+		env,
 		method: "POST",
 		headers: {
 			"content-type": "application/x-www-form-urlencoded",
@@ -71,8 +80,12 @@ export async function exchangeAuthorizationCode({
 		}),
 	});
 
-	const payload = parseJson(await response.text());
+	const body = await response.text();
+	const payload = parseJson(body);
 	if (!response.ok) {
+		if (isRetryableStatus(response.status)) {
+			throw classifiedWhoopFailure("the token exchange", response, body);
+		}
 		throw new Error(rejection(response.status, payload));
 	}
 

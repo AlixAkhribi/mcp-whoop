@@ -1,5 +1,6 @@
-import { revokeAccessEndpoint } from "@/api/client/endpoints";
-import { whoopRequestTimeoutMs } from "@/api/client/http";
+import { registerSecrets } from "@/lib/redaction";
+import { revokeAccessEndpoint } from "@/whoop/api/client/endpoints";
+import { whoopFetch } from "@/whoop/api/client/http";
 
 /**
  * Asks WHOOP to revoke the access the given token carries, by DELETEing
@@ -11,16 +12,16 @@ import { whoopRequestTimeoutMs } from "@/api/client/http";
  */
 export async function revokeAccess(
 	accessToken: string,
-	env: NodeJS.ProcessEnv = process.env,
+	{ env = process.env }: { env?: NodeJS.ProcessEnv } = {},
 ): Promise<{ confirmed: boolean }> {
 	try {
-		const response = await fetch(revokeAccessEndpoint(env), {
+		registerSecrets(accessToken);
+		const response = await whoopFetch({
+			operation: "the access revocation",
+			url: revokeAccessEndpoint(env),
+			env,
 			method: "DELETE",
 			headers: { authorization: `Bearer ${accessToken}` },
-			// Bounded like every other WHOOP request: a revocation nobody answers
-			// would hold the logout that asked for it open, and an unconfirmed
-			// revocation is already an outcome this reports rather than waits out.
-			signal: AbortSignal.timeout(whoopRequestTimeoutMs(env)),
 		});
 
 		return { confirmed: response.ok };

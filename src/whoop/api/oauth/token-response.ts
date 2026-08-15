@@ -1,7 +1,6 @@
 import { z } from "zod";
-
-import type { StoredTokens } from "@/auth/tokens/store";
 import { registerSecrets } from "@/lib/redaction";
+import type { StoredTokens } from "@/whoop/auth/tokens/store";
 
 /** The part of WHOOP's token response this server acts on. */
 const tokenResponseSchema = z.object({

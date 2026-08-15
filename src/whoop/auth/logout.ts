@@ -1,16 +1,16 @@
-import { revokeAccess } from "@/api/oauth/revoke";
-import { refreshTokens } from "@/api/oauth/token-refresh";
+import { revokeAccess } from "@/whoop/api/oauth/revoke";
+import { refreshTokens } from "@/whoop/api/oauth/token-refresh";
 import {
 	deleteStoredTokens,
 	readStoredTokens,
 	type StoredTokens,
-} from "@/auth/tokens/store";
+} from "@/whoop/auth/tokens/store";
 
 /**
  * The parts of the logout command a terminal normally owns. Both default to
  * the real thing; passing explicit ones keeps a run from writing to the console.
  */
-export type LogoutRuntime = {
+type LogoutRuntime = {
 	/** Environment the WHOOP base URL and the store location come from. */
 	readonly env?: NodeJS.ProcessEnv;
 	/** Where the command's own output goes. */
@@ -45,7 +45,7 @@ async function revocableAccessToken(
 	}
 
 	try {
-		return (await refreshTokens(tokens, env)).accessToken;
+		return (await refreshTokens(tokens, { env })).accessToken;
 	} catch {
 		return tokens.accessToken;
 	}
@@ -70,7 +70,7 @@ export async function runLogout({
 
 	const { confirmed } = await revokeAccess(
 		await revocableAccessToken(tokens, env),
-		env,
+		{ env },
 	);
 	await deleteStoredTokens({ env });
 

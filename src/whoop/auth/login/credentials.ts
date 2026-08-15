@@ -5,14 +5,14 @@ import { registerSecrets } from "@/lib/redaction";
  * registers their own application in WHOOP's Developer Dashboard, so these are
  * the user's to provide and there is nothing to fall back to.
  */
-export const CREDENTIAL_VARIABLES = [
+const CREDENTIAL_VARIABLES = [
 	"WHOOP_CLIENT_ID",
 	"WHOOP_CLIENT_SECRET",
 	"WHOOP_REDIRECT_URI",
 ] as const;
 
 /** One of the environment variables a WHOOP app is configured through. */
-export type CredentialVariable = (typeof CREDENTIAL_VARIABLES)[number];
+type CredentialVariable = (typeof CREDENTIAL_VARIABLES)[number];
 
 /**
  * Which credentials the given environment does not supply, in the order above.
