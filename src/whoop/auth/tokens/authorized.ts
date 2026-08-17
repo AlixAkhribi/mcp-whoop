@@ -10,12 +10,12 @@ import {
 	type StoredTokens,
 	writeStoredTokens,
 } from "./store";
-import { requireStoredLogin } from "./stored-login";
+import { LoginRequiredError, requireStoredLogin } from "./stored-login";
 
 /**
- * Shown when WHOOP rejects the refresh token itself: the stored login is dead —
- * revoked, or idle past WHOOP's limit — and only the out-of-band login command
- * brings it back.
+ * Shown when WHOOP rejects the refresh token itself and no consent screen can
+ * be offered: the stored login is dead — revoked, or idle past WHOOP's limit
+ * — and the out-of-band login command is then the only way back.
  */
 const LOGIN_NO_LONGER_VALID =
 	"The stored WHOOP login is no longer valid. Run `npx mcp-whoop login` in a terminal to log in again, then try again.";
@@ -43,8 +43,10 @@ async function storedTokensNow(
  * it first has usually rotated already, and those tokens are adopted instead of
  * spending a refresh WHOOP would reject.
  *
- * @throws When WHOOP rejects the refresh token and no newer rotation is on
- * disk, carrying {@link LOGIN_NO_LONGER_VALID}.
+ * @throws {LoginRequiredError} When WHOOP rejects the refresh token and no
+ * newer rotation is on disk — the same class as a login that never happened,
+ * so a client that can be shown WHOOP's consent screen is offered one instead
+ * of {@link LOGIN_NO_LONGER_VALID}.
  */
 async function refreshAndPersist(
 	stored: StoredTokens,
@@ -74,7 +76,7 @@ async function refreshAndPersist(
 			if (adopted.refreshToken !== current.refreshToken) {
 				return adopted;
 			}
-			throw new Error(LOGIN_NO_LONGER_VALID);
+			throw new LoginRequiredError(LOGIN_NO_LONGER_VALID);
 		}
 		await writeStoredTokens(rotated, { env });
 
