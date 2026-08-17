@@ -1,3 +1,13 @@
+# [0.7.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.6.0...v0.7.0) (2026-08-17)
+
+
+### Features
+
+* offer a WHOOP consent link when a tool call has no login ([d611068](https://github.com/AlixAkhribi/mcp-whoop/commit/d611068d216f253c048e0a380502a577cf5ffde1))
+* repair a dead login inside the conversation ([f142697](https://github.com/AlixAkhribi/mcp-whoop/commit/f1426975d3cc980b27c2e55046e80e80b07f210e))
+* resolve the WHOOP application from one rule ([6cb4eb2](https://github.com/AlixAkhribi/mcp-whoop/commit/6cb4eb2c661c408ea8825da6bbba6db32164630c))
+* settle login timing and redirect handling in configuration ([6ed0531](https://github.com/AlixAkhribi/mcp-whoop/commit/6ed0531b8db815bce3dc5a8987c22a8065f7d728))
+
 # [0.6.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.5.0...v0.6.0) (2026-08-13)
 
 
