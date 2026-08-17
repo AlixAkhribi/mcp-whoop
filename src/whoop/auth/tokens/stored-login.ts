@@ -5,9 +5,17 @@ import {
 } from "./store";
 
 /**
- * Shown when the server has never been logged in. It names the out-of-band
- * login command because that is the only way out: an MCP client cannot drive
- * WHOOP's browser consent for the user.
+ * No usable login stands behind the call — none was recorded, or WHOOP has
+ * stopped honouring it. Its own class so the one failure a client can be
+ * walked out of — by being shown WHOOP's consent screen — is distinguishable
+ * from every other way a read can fail; the message stays the prose a client
+ * without that support still reads.
+ */
+export class LoginRequiredError extends Error {}
+
+/**
+ * Shown when the server has never been logged in and no consent screen can be
+ * offered. Names the out-of-band login command, then the only way out.
  */
 const NOT_LOGGED_IN =
 	"Not connected to WHOOP. Run `npx mcp-whoop login` in a terminal to authorize this server, then try again.";
@@ -32,10 +40,10 @@ export async function requireStoredLogin(
 	location: TokenStoreLocation = {},
 ): Promise<StoredTokens> {
 	const tokens = await readStoredTokens(location).catch(() => {
-		throw new Error(STORE_UNREADABLE);
+		throw new LoginRequiredError(STORE_UNREADABLE);
 	});
 	if (!tokens) {
-		throw new Error(NOT_LOGGED_IN);
+		throw new LoginRequiredError(NOT_LOGGED_IN);
 	}
 
 	return tokens;
