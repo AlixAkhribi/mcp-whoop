@@ -7,21 +7,21 @@ import {
 } from "@/whoop/auth/tokens/store";
 import { buildAuthorizeUrl } from "./authorize-url";
 import { openInBrowser } from "./browser";
+import { missingCredentialsMessage } from "./checklist";
 import {
+	applicationRecord,
 	missingCredentialVariables,
 	readCredentials,
 	type WhoopAppCredentials,
 } from "./credentials";
 import {
+	isLoopbackRedirect,
 	listenForRedirect,
 	type RedirectCapture,
 	type RedirectExpectation,
 } from "./redirect-listener";
 import { readPastedRedirect } from "./redirect-paste";
 import { requestedScopes } from "./requested-scopes";
-
-/** Where a user registers the WHOOP application these credentials come from. */
-const DEVELOPER_DASHBOARD = "https://developer-dashboard.whoop.com";
 
 /**
  * The parts of the login command a terminal normally owns. Every one defaults
@@ -41,24 +41,6 @@ type LoginRuntime = {
 	readonly input?: NodeJS.ReadableStream;
 };
 
-/**
- * The message for an incomplete environment. Only the variables actually
- * missing are named, so it reads as a checklist of what is left to do.
- */
-function missingCredentialsMessage(missing: readonly string[]): string {
-	const subject =
-		missing.length === 1
-			? "an environment variable is"
-			: "environment variables are";
-
-	return [
-		`Cannot log in to WHOOP: ${subject} missing.`,
-		...missing.map((name) => `  - ${name}`),
-		"",
-		`Every user brings their own WHOOP application. Register one in the WHOOP Developer Dashboard (${DEVELOPER_DASHBOARD}), then set the variable${missing.length === 1 ? "" : "s"} above from its settings and run this command again.`,
-	].join("\n");
-}
-
 /** What went wrong, as a user should read it. */
 function describeFailure(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -74,15 +56,6 @@ type RedirectCaptureStrategy = RedirectCapture & {
 	readonly waiting: readonly string[];
 };
 
-/** Whether this machine could open a listener on the redirect URI's own port. */
-function isLoopback(redirectUri: URL): boolean {
-	const { hostname } = redirectUri;
-
-	return (
-		hostname === "localhost" || hostname === "[::1]" || /^127\./.test(hostname)
-	);
-}
-
 /**
  * A listener on the redirect URI's own port, or undefined when this machine
  * will not give it to this login: a port another process or another login
@@ -92,7 +65,7 @@ function isLoopback(redirectUri: URL): boolean {
 async function openListener(
 	expectation: RedirectExpectation,
 ): Promise<RedirectCapture | undefined> {
-	if (!isLoopback(expectation.redirectUri)) {
+	if (!isLoopbackRedirect(expectation.redirectUri)) {
 		return undefined;
 	}
 
@@ -218,7 +191,12 @@ export async function runLogin({
 
 	const app = readCredentials(env);
 	if (!app) {
-		reportFailure(missingCredentialsMessage(missingCredentialVariables(env)));
+		reportFailure(
+			missingCredentialsMessage(
+				missingCredentialVariables(env),
+				"run this command again",
+			),
+		);
 
 		return 1;
 	}
@@ -235,10 +213,7 @@ export async function runLogin({
 		// process an MCP client spawns has no WHOOP environment of its own, and
 		// the refresh grant must authenticate as this same application.
 		await writeStoredTokens(
-			{
-				...tokens,
-				application: { clientId: app.clientId, clientSecret: app.clientSecret },
-			},
+			{ ...tokens, application: applicationRecord(app) },
 			{ env },
 		);
 

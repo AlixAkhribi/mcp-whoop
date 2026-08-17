@@ -1,6 +1,5 @@
 import { writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -11,6 +10,7 @@ import { writeStoredTokens } from "@/whoop/auth/tokens/store";
 import {
 	listenOnLoopback,
 	temporaryStore,
+	unusedRedirectUri,
 	withBuiltStdioClient,
 } from "../helpers/harness";
 
@@ -74,26 +74,6 @@ async function startFakeWhoop(): Promise<FakeWhoop> {
 	});
 
 	return { baseUrl: await listenOnLoopback(server), requests };
-}
-
-/**
- * A redirect URI nothing is listening on yet, so the login command is the one
- * that binds its port.
- */
-async function unusedRedirectUri(): Promise<string> {
-	const server = createServer();
-	await new Promise<void>((resolve, reject) => {
-		server.once("error", reject);
-		server.listen(0, "127.0.0.1", resolve);
-	});
-	const { port } = server.address() as AddressInfo;
-	await new Promise<void>((resolve) => {
-		server.close(() => {
-			resolve();
-		});
-	});
-
-	return `http://127.0.0.1:${port}/callback`;
 }
 
 /**

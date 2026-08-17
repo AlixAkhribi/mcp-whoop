@@ -1,14 +1,17 @@
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { runLogin } from "@/whoop/auth/login";
 
-import { listenOnLoopback, temporaryStore } from "../helpers/harness";
+import {
+	listenOnLoopback,
+	temporaryStore,
+	unusedRedirectUri,
+} from "../helpers/harness";
 
 /**
  * The same promise, but reported as a legible failure when it stalls — a login
@@ -24,26 +27,6 @@ function within<T>(work: Promise<T>, what: string): Promise<T> {
 			}, 10_000).unref();
 		}),
 	]);
-}
-
-/**
- * A redirect URI nothing is listening on yet, so the login command is the one
- * that binds its port.
- */
-async function unusedRedirectUri(): Promise<string> {
-	const server = createServer();
-	await new Promise<void>((resolve, reject) => {
-		server.once("error", reject);
-		server.listen(0, "127.0.0.1", resolve);
-	});
-	const { port } = server.address() as AddressInfo;
-	await new Promise<void>((resolve) => {
-		server.close(() => {
-			resolve();
-		});
-	});
-
-	return `http://127.0.0.1:${port}/callback`;
 }
 
 /** How a stand-in WHOOP answers a request to its token endpoint. */
@@ -244,6 +227,19 @@ describe("logging in over the loopback redirect", () => {
 				clientId: "a-client-id",
 				clientSecret: "a-client-secret",
 			},
+		});
+	});
+
+	it("stores the redirect URI beside the application it logged in as", async () => {
+		const { exitCode, store, redirectUri } = await completeLogin();
+
+		expect(exitCode).toBe(0);
+		// Asking WHOOP for consent again needs the redirect URI, so it is recorded
+		// with the pair rather than left in this command's environment.
+		expect((await storedTokens(store)).application).toMatchObject({
+			clientId: "a-client-id",
+			clientSecret: "a-client-secret",
+			redirectUri,
 		});
 	});
 

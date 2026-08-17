@@ -262,6 +262,19 @@ describe("logging in by pasting the redirected URL", () => {
 		expect(exitCode).toBe(0);
 	});
 
+	it("stores the redirect URI beside the application it logged in as", async () => {
+		const { exitCode, store, redirectUri } = await completeLogin();
+
+		expect(exitCode).toBe(0);
+		// A pasted code records the same application and redirect URI as a caught
+		// one: how the code came back is no part of the record.
+		expect((await storedTokens(store)).application).toMatchObject({
+			clientId: "a-client-id",
+			clientSecret: "a-client-secret",
+			redirectUri,
+		});
+	});
+
 	it("asks for the redirected URL instead of waiting to be sent one", async () => {
 		const { authorizeUrl, printed } = await completeLogin();
 		const transcript = printed.join("\n");
