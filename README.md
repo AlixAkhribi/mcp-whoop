@@ -77,16 +77,27 @@ use. `WHOOP_HTTP_TIMEOUT_MS` moves the thirty-second bound every WHOOP request i
 given, and `WHOOP_API_BASE_URL` points the client at an origin other than WHOOP's
 own.
 
+Two more bound the login this server offers inside a conversation, when a tool
+call finds none stored. `WHOOP_LOGIN_WAIT_MS` is how long such a call waits for
+WHOOP to send the browser back before answering "still going" and letting the
+client come round again — 2000 ms, two seconds, by default. `WHOOP_LOGIN_TTL_MS`
+is how long an offer nobody ever answers keeps the loopback port it borrowed to
+catch that redirect: 600000 ms, ten minutes, after which the port goes back to
+the machine and the next call offers a fresh link.
+
 Every `WHOOP_*` variable is validated at startup against what the command being
 run actually reads. None is required, but a value that does not parse — a timeout
 that is not a whole number of milliseconds Node's timers can honor, a URL that is
 not an origin, or a scope this server cannot ask WHOOP for — stops that command
-with a checklist naming what to fix. `WHOOP_REDIRECT_URI` and `WHOOP_SCOPES` are
-read by `login` alone, so a mistake in either refuses `login` but only warns under
-`stdio` and `logout`. Serving is never taken down by a value it does not consume,
-which matters when the MCP host that spawned it reports an exit as a failed
-server and every tool disappears. A `WHOOP_*` name the server does not read at all
-is called out on stderr as a likely typo.
+with a checklist naming what to fix. `WHOOP_SCOPES` is read by `login` alone, so
+a mistake in it refuses `login` but only warns under `stdio` and `logout`.
+`WHOOP_REDIRECT_URI` is read by serving too — it is the address WHOOP sends the
+browser back to when the server offers you a login inside a conversation, which
+it catches on this machine — but a mistake in it warns there rather than
+refusing: it costs that offer, not the server. Serving is never taken down by a
+value it can carry on without, which matters when the MCP host that spawned it
+reports an exit as a failed server and every tool disappears. A `WHOOP_*` name
+the server does not read at all is called out on stderr as a likely typo.
 
 Diagnostics go to stderr, never stdout. Under `stdio`, stdout is the JSON-RPC
 wire, and stderr is the stream the MCP stdio transport reserves for logging. MCP

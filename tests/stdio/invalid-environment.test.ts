@@ -125,12 +125,83 @@ describe("a misconfigured environment", () => {
 	});
 });
 
+describe("a malformed redirect URI, which serving reads and carries on without", () => {
+	it("warns about the in-conversation login it disables, and serves anyway", async () => {
+		// Serving reads this variable now — it is where an offered login's
+		// loopback listener catches WHOOP's redirect — so a malformed value costs
+		// the in-conversation login and nothing else.
+		const store = await temporaryStore();
+		const stderr = await withBuiltStdioClient(
+			{
+				store,
+				env: { WHOOP_REDIRECT_URI: "not a url" },
+				inheritEnvironment: false,
+				stderr: "pipe",
+			},
+			async (client, _transport, stderr) => {
+				await expect(client.listTools()).resolves.toBeDefined();
+
+				return stderr;
+			},
+		);
+
+		await vi.waitFor(() => {
+			expect(stderr()).toContain("WHOOP_REDIRECT_URI");
+		});
+		// The warning has to name the cost: no consent link from inside a
+		// conversation while this value does not parse.
+		expect(stderr()).toMatch(/inside a conversation/);
+		// And not the older claim that only `login` reads it.
+		expect(stderr()).not.toContain("only `login` reads");
+		expect(stderr()).not.toContain("Cannot start mcp-whoop");
+	});
+
+	it("still refuses `login` over the same value, with the checklist unchanged", async () => {
+		const { code, stderr } = await runBuilt(
+			["login"],
+			environmentWith({ WHOOP_REDIRECT_URI: "not a url" }),
+		);
+
+		// `login` reaches for a browser with this value in hand, so it stays a
+		// hard refusal there, in the same words as before.
+		expect(code).not.toBe(0);
+		expect(stderr).toContain("Cannot start mcp-whoop");
+		expect(stderr).toContain(
+			"  - WHOOP_REDIRECT_URI must be the URL WHOOP sends the browser back to",
+		);
+		// The serving warning names something `login` never had, so it must not
+		// appear here.
+		expect(stderr).not.toMatch(/inside a conversation/);
+	});
+
+	it("says nothing at all when the redirect URI parses", async () => {
+		const store = await temporaryStore();
+		const stderr = await withBuiltStdioClient(
+			{
+				store,
+				redirectUri: "http://127.0.0.1:8788/callback",
+				inheritEnvironment: false,
+				stderr: "pipe",
+			},
+			async (client, _transport, stderr) => {
+				await expect(client.listTools()).resolves.toBeDefined();
+
+				return stderr;
+			},
+		);
+
+		// Serving reading this variable must not turn every ordinary startup into
+		// a warning.
+		expect(stderr()).not.toContain("WHOOP_REDIRECT_URI");
+		expect(stderr()).not.toContain("Ignoring");
+	});
+});
+
 describe("a login-only variable serving never reads", () => {
 	it("leaves serving up, and says so on stderr", async () => {
-		// The whole point of the split: an MCP host reports a server that exits
-		// as failed and every tool goes with it, so a redirect URI serving does
-		// not consume must not be able to do that. Speaking MCP to the built
-		// binary is the proof — it answered, so it started.
+		// An MCP host reports a server that exits as failed and every tool goes
+		// with it, so a value serving can carry on without must not stop startup.
+		// Speaking MCP to the built binary is the proof it started.
 		const store = await temporaryStore();
 		const stderr = await withBuiltStdioClient(
 			{
