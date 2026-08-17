@@ -82,6 +82,12 @@ export type StoredApplication = {
 	readonly clientId: string;
 	/** The application's secret, which signs every refresh grant. */
 	readonly clientSecret: string;
+	/**
+	 * Where the login had WHOOP send the browser back to. Optional so stores
+	 * written before it was recorded still load; a registered callback
+	 * address, not a secret.
+	 */
+	readonly redirectUri?: string;
 };
 
 /** What a login leaves behind. */
@@ -109,7 +115,11 @@ const storedTokensSchema = z.object({
 	expiresAt: z.number(),
 	scopes: z.array(z.string()),
 	application: z
-		.object({ clientId: z.string(), clientSecret: z.string() })
+		.object({
+			clientId: z.string(),
+			clientSecret: z.string(),
+			redirectUri: z.string().optional(),
+		})
 		.optional(),
 });
 
