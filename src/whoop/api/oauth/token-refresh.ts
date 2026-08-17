@@ -1,16 +1,13 @@
 import { log } from "@/lib/log";
-import { registerSecrets } from "@/lib/redaction";
 import { tokenEndpoint } from "@/whoop/api/client/endpoints";
 import {
 	classifiedWhoopFailure,
 	isRetryableStatus,
 	whoopFetch,
 } from "@/whoop/api/client/http";
+import { resolveApplication } from "@/whoop/auth/application";
 import { OFFLINE_SCOPE } from "@/whoop/auth/tokens/scopes";
-import type {
-	StoredApplication,
-	StoredTokens,
-} from "@/whoop/auth/tokens/store";
+import type { StoredTokens } from "@/whoop/auth/tokens/store";
 import {
 	oauthErrorSchema,
 	parseJson,
@@ -34,32 +31,14 @@ const NO_APP_CREDENTIALS =
 	"No WHOOP app credentials are available to refresh the login with. Run `npx mcp-whoop login` in a terminal to log in again (the login stores them for refreshes), or set WHOOP_CLIENT_ID and WHOOP_CLIENT_SECRET in the MCP server's environment.";
 
 /**
- * The application this refresh authenticates as: the environment's pair when
- * the serving process carries a whole one, otherwise the pair the login
- * recorded beside the tokens. Explicit configuration wins so that a secret
- * rotated in WHOOP's dashboard reaches a store written before the rotation.
- */
-function refreshApplication(
-	stored: StoredTokens,
-	env: NodeJS.ProcessEnv,
-): StoredApplication | undefined {
-	const clientId = env.WHOOP_CLIENT_ID?.trim();
-	const clientSecret = env.WHOOP_CLIENT_SECRET?.trim();
-	if (clientId && clientSecret) {
-		return { clientId, clientSecret };
-	}
-
-	return stored.application;
-}
-
-/**
  * Trades the stored refresh token for a rotated access+refresh pair.
  *
  * WHOOP rotates the refresh token on every use, so the returned pair wholly
  * replaces the one sent. The `offline` scope is requested again because WHOOP
  * requires it on refresh grants to keep issuing refresh tokens. The signing
- * application is stored with the rotation, so the next refresh needs no
- * environment at all.
+ * application — resolved by the shared precedence rule
+ * (`src/whoop/auth/application.ts`) — is stored with the rotation, so the
+ * next refresh needs no environment at all.
  *
  * @throws {InvalidGrantError} When WHOOP rejects the refresh token itself, so
  * callers can tell a dead login apart from a failure a retry could get past.
@@ -68,12 +47,10 @@ export async function refreshTokens(
 	stored: StoredTokens,
 	{ env = process.env }: { env?: NodeJS.ProcessEnv } = {},
 ): Promise<StoredTokens> {
-	const application = refreshApplication(stored, env);
+	const application = resolveApplication(env, stored.application);
 	if (!application) {
 		throw new Error(NO_APP_CREDENTIALS);
 	}
-	// The client secret enters the serving process here, from either source.
-	registerSecrets(application.clientSecret);
 
 	log.debug("asking WHOOP to refresh the access token");
 	const response = await whoopFetch({
@@ -122,9 +99,21 @@ export async function refreshTokens(
 		throw classifiedWhoopFailure("the token refresh", response, body);
 	}
 
+	// A malformed WHOOP_REDIRECT_URI only warns under stdio
+	// (`src/config/environment.ts`), so it can reach here; persisting it would
+	// overwrite the valid address a login recorded. Keep the stored value
+	// unless the resolved one parses.
+	const redirectUri =
+		application.redirectUri !== undefined && URL.parse(application.redirectUri)
+			? application.redirectUri
+			: stored.application?.redirectUri;
 	const rotated: StoredTokens = {
 		...storedTokensFromResponse(payload, stored.scopes),
-		application,
+		application: {
+			clientId: application.clientId,
+			clientSecret: application.clientSecret,
+			...(redirectUri === undefined ? {} : { redirectUri }),
+		},
 	};
 	// Refreshes are rare and load-bearing — a dead login shows up here first —
 	// so the success is worth a default-visible line, told only once the 200

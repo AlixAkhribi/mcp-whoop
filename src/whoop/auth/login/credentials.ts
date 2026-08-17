@@ -1,18 +1,20 @@
 import { registerSecrets } from "@/lib/redaction";
+import type { StoredApplication } from "@/whoop/auth/tokens/store";
 
 /**
  * The credentials a WHOOP app supplies through the environment. Every user
- * registers their own application in WHOOP's Developer Dashboard, so these are
- * the user's to provide and there is nothing to fall back to.
+ * registers their own application in WHOOP's Developer Dashboard, so these
+ * are the user's to provide; a serving process can also fall back to what a
+ * login recorded beside the tokens (`src/whoop/auth/application.ts`).
  */
-const CREDENTIAL_VARIABLES = [
+export const CREDENTIAL_VARIABLES = [
 	"WHOOP_CLIENT_ID",
 	"WHOOP_CLIENT_SECRET",
 	"WHOOP_REDIRECT_URI",
 ] as const;
 
 /** One of the environment variables a WHOOP app is configured through. */
-type CredentialVariable = (typeof CREDENTIAL_VARIABLES)[number];
+export type CredentialVariable = (typeof CREDENTIAL_VARIABLES)[number];
 
 /**
  * Which credentials the given environment does not supply, in the order above.
@@ -51,4 +53,17 @@ export function readCredentials(
 	registerSecrets(clientSecret);
 
 	return { clientId, clientSecret, redirectUri };
+}
+
+/**
+ * What a login records about the application it used: the pair WHOOP
+ * re-authenticates on every refresh (ADR 0003) and the redirect URI consent
+ * was granted at. Written identically by both login flows.
+ */
+export function applicationRecord(app: WhoopAppCredentials): StoredApplication {
+	return {
+		clientId: app.clientId,
+		clientSecret: app.clientSecret,
+		redirectUri: app.redirectUri,
+	};
 }

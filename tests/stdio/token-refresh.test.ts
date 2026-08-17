@@ -391,6 +391,89 @@ describe("token refresh around authorized calls, over real stdio", () => {
 		});
 	});
 
+	it("carries the stored redirect URI forward when the environment's pair replaces it", async () => {
+		const whoop = await startFakeWhoop({
+			accepts: "rotated-access",
+			refresh: { rotated: ROTATED },
+		});
+		const store = await temporaryStore();
+		await writeStoredTokens(
+			{
+				accessToken: "stale-access",
+				refreshToken: "seed-refresh",
+				expiresAt: Date.now() - 60_000,
+				scopes: ["read:profile", "offline"],
+				application: {
+					...STORED_APPLICATION,
+					redirectUri: "http://127.0.0.1:4711/callback",
+				},
+			},
+			{ env: { WHOOP_TOKEN_STORE: store } },
+		);
+
+		const result = await withBuiltStdioClient(
+			{
+				store,
+				whoopBaseUrl: whoop.baseUrl,
+				credentials: {
+					clientId: "env-client-id",
+					clientSecret: "env-client-secret",
+				},
+			},
+			(client) => client.callTool({ name: "get_profile", arguments: {} }),
+		);
+		expect(result.isError).not.toBe(true);
+
+		// The environment overrides the stored client pair and nothing else: the
+		// redirect URI the login was granted at survives the rotation.
+		const stored = await readStoredTokens({
+			env: { WHOOP_TOKEN_STORE: store },
+		});
+		expect(stored?.application).toEqual({
+			clientId: "env-client-id",
+			clientSecret: "env-client-secret",
+			redirectUri: "http://127.0.0.1:4711/callback",
+		});
+	});
+
+	it("keeps the stored redirect URI when the environment's is not a URL at all", async () => {
+		const whoop = await startFakeWhoop({
+			accepts: "rotated-access",
+			refresh: { rotated: ROTATED },
+		});
+		const store = await temporaryStore();
+		await writeStoredTokens(
+			{
+				accessToken: "stale-access",
+				refreshToken: "seed-refresh",
+				expiresAt: Date.now() - 60_000,
+				scopes: ["read:profile", "offline"],
+				application: {
+					...STORED_APPLICATION,
+					redirectUri: "http://127.0.0.1:4711/callback",
+				},
+			},
+			{ env: { WHOOP_TOKEN_STORE: store } },
+		);
+
+		const result = await withBuiltStdioClient(
+			{ store, whoopBaseUrl: whoop.baseUrl, redirectUri: "not-a-url" },
+			(client) => client.callTool({ name: "get_profile", arguments: {} }),
+		);
+		expect(result.isError).not.toBe(true);
+
+		// Serving only warns about a malformed WHOOP_REDIRECT_URI, so the refresh
+		// sees it verbatim; the valid stored address must survive, since a later
+		// re-login with no environment set is offered at that one.
+		const stored = await readStoredTokens({
+			env: { WHOOP_TOKEN_STORE: store },
+		});
+		expect(stored?.application).toEqual({
+			...STORED_APPLICATION,
+			redirectUri: "http://127.0.0.1:4711/callback",
+		});
+	});
+
 	it("names both remedies when neither the store nor the environment can sign", async () => {
 		const whoop = await startFakeWhoop({
 			accepts: "rotated-access",
