@@ -273,13 +273,28 @@ describe("the per-command surface", () => {
 		// Not stopped by it, but not silently swallowing it either: the same
 		// checklist line, said where it costs nothing.
 		const warnings = environmentWarnings(
+			completeEnvironment({ WHOOP_SCOPES: "read:sleep read:sleeep" }),
+			"stdio",
+		);
+
+		expect(warnings).toContain("WHOOP_SCOPES");
+		expect(warnings).toContain("only `login` reads it");
+		expect(warnings).toContain("this server cannot ask");
+	});
+
+	it("warns that a malformed redirect URI costs serving its in-conversation login", () => {
+		// Serving reads this one — it is where an offered login catches the
+		// redirect — so the warning names that cost. Still only a warning: a typo
+		// here must not take every tool down.
+		const warnings = environmentWarnings(
 			completeEnvironment({ WHOOP_REDIRECT_URI: "not a url" }),
 			"stdio",
 		);
 
 		expect(warnings).toContain("WHOOP_REDIRECT_URI");
-		expect(warnings).toContain("only `login` reads it");
+		expect(warnings).toMatch(/inside a conversation/);
 		expect(warnings).toContain("must be the URL WHOOP sends the browser back");
+		expect(warnings).not.toContain("only `login` reads");
 	});
 
 	it("leaves that warning to the refusal when login is what is running", () => {

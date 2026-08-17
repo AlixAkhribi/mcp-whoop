@@ -1,8 +1,7 @@
-/** Default bound for every request made to WHOOP. */
-const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
+import { MAX_TIMER_MS } from "@/config/timers";
 
-/** Node's maximum reliable timer delay. */
-export const MAX_HTTP_TIMEOUT_MS = 2_147_483_647;
+/** Default bound for every request made to WHOOP. */
+export const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
 
 /**
  * Resolves the WHOOP request bound from the same environment as the endpoint.
@@ -15,7 +14,7 @@ export function whoopRequestTimeoutMs(
 
 	return Number.isInteger(configured) &&
 		configured >= 1 &&
-		configured <= MAX_HTTP_TIMEOUT_MS
+		configured <= MAX_TIMER_MS
 		? configured
 		: DEFAULT_HTTP_TIMEOUT_MS;
 }

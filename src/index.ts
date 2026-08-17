@@ -61,8 +61,9 @@ async function run(): Promise<void> {
 	// mistyped command is an invocation mistake and reads as usage, but a value
 	// the environment misdescribes must stop the commands that read it before
 	// they act on it. It is asked about this command in particular, so a
-	// login-only variable cannot take serving down. Both reports go to stderr —
-	// under `stdio`, stdout belongs to the protocol from the first byte.
+	// variable this command can carry on without does not take it down. Both
+	// reports go to stderr — under `stdio`, stdout belongs to the protocol
+	// from the first byte.
 	const { environmentProblems, environmentWarnings } = await import(
 		"@/config/environment"
 	);

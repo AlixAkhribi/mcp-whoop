@@ -9,7 +9,12 @@
  */
 
 import { z } from "zod";
-import { MAX_HTTP_TIMEOUT_MS } from "@/config/http";
+import {
+	DEFAULT_LOGIN_TTL_MS,
+	DEFAULT_LOGIN_WAIT_MS,
+} from "@/config/elicited-login";
+import { DEFAULT_HTTP_TIMEOUT_MS } from "@/config/http";
+import { MAX_TIMER_MS } from "@/config/timers";
 import { LOG_LEVELS } from "@/lib/log";
 import { splitScopes } from "@/whoop/auth/login/requested-scopes";
 import { DEFAULT_READ_SCOPES, OFFLINE_SCOPE } from "@/whoop/auth/tokens/scopes";
@@ -27,8 +32,19 @@ function unsetWhenBlank(schema: z.ZodType) {
 	);
 }
 
-/** One complaint fits every way a timeout can fail to be one. */
-const TIMEOUT_COMPLAINT = `must be a whole number of milliseconds from 1 to ${MAX_HTTP_TIMEOUT_MS}, like 30000`;
+/**
+ * A millisecond duration Node's timers can honour. One complaint covers every
+ * way it can fail, naming the variable's default as its example.
+ */
+function duration(what: string, byDefault: number) {
+	const complaint = `must be ${what}, a whole number of milliseconds from 1 to ${MAX_TIMER_MS}, like ${byDefault}`;
+
+	return z.coerce
+		.number({ error: complaint })
+		.int({ error: complaint })
+		.min(1, { error: complaint })
+		.max(MAX_TIMER_MS, { error: complaint });
+}
 
 /** Every scope this server could ever ask WHOOP for. */
 const KNOWN_SCOPES = new Set<string>([...DEFAULT_READ_SCOPES, OFFLINE_SCOPE]);
@@ -101,11 +117,19 @@ const environmentSchema = z.object({
 			}),
 	),
 	WHOOP_HTTP_TIMEOUT_MS: unsetWhenBlank(
-		z.coerce
-			.number({ error: TIMEOUT_COMPLAINT })
-			.int({ error: TIMEOUT_COMPLAINT })
-			.min(1, { error: TIMEOUT_COMPLAINT })
-			.max(MAX_HTTP_TIMEOUT_MS, { error: TIMEOUT_COMPLAINT }),
+		duration("the bound every WHOOP request is given", DEFAULT_HTTP_TIMEOUT_MS),
+	),
+	WHOOP_LOGIN_WAIT_MS: unsetWhenBlank(
+		duration(
+			"how long a tool call waits for a login it offered inside a conversation before asking the client to come back",
+			DEFAULT_LOGIN_WAIT_MS,
+		),
+	),
+	WHOOP_LOGIN_TTL_MS: unsetWhenBlank(
+		duration(
+			"how long such a login keeps the loopback port it borrowed while nobody comes back to it",
+			DEFAULT_LOGIN_TTL_MS,
+		),
 	),
 	WHOOP_LOG_LEVEL: unsetWhenBlank(
 		z.enum(LOG_LEVELS, {
@@ -121,19 +145,40 @@ const environmentSchema = z.object({
 /** The commands this gate can validate. */
 export type Command = "stdio" | "login" | "logout";
 
+/** What a demoted variable's warning is made of, for one command. */
+type Demotion = {
+	/** What a malformed value costs the command that is running. */
+	readonly cost: string;
+	/** What the reader does about it, and what fixing it buys back. */
+	readonly remedy: string;
+};
+
 /**
- * The variables `login` alone reads: the redirect it sends the browser back to
- * and the scopes it asks for. Everything else in the schema is read by every
- * command, so absence from this set means "gated everywhere".
- *
- * The split exists because serving must not be killable by a value it never
- * consumes: an MCP host reports a server that exits as failed and every tool
- * disappears with it, and `.env.example` invites copying the whole login block
- * into that server entry, so a typo'd redirect URI there is a realistic way to
- * lose WHOOP access entirely. Under a command that does not read them these
- * two are demoted to a warning, never ignored.
+ * The variables only `login` refuses over. `WHOOP_SCOPES` is read by nothing
+ * else. `WHOOP_REDIRECT_URI` is read while serving too (to offer a login
+ * inside a conversation), but stays demoted: an MCP host treats an exiting
+ * server as failed with every tool gone, and `.env.example` invites copying
+ * the login block into the server entry, so a typo there must cost only the
+ * offer. Each warning states whether the variable is unread or read-but-
+ * unusable under the running command.
  */
-const LOGIN_ONLY = new Set<string>(["WHOOP_REDIRECT_URI", "WHOOP_SCOPES"]);
+const DEMOTED: Record<string, (command: Command) => Demotion> = {
+	WHOOP_REDIRECT_URI: (command) =>
+		command === "stdio"
+			? {
+					cost: "WHOOP_REDIRECT_URI does not parse, so no WHOOP login can be offered inside a conversation: a tool call that finds no stored login is answered with instructions to log in from a terminal instead.",
+					remedy:
+						"`stdio` serves on regardless. Fix it to have that offer back, and before the next `mcp-whoop login`, which does refuse over it.",
+				}
+			: {
+					cost: `Ignoring WHOOP_REDIRECT_URI: \`${command}\` does not read it.`,
+					remedy: `\`${command}\` carries on. Fix it before the next \`mcp-whoop login\`.`,
+				},
+	WHOOP_SCOPES: (command) => ({
+		cost: "Ignoring WHOOP_SCOPES: only `login` reads it, and `login` is not what is running.",
+		remedy: `\`${command}\` carries on. Fix it before the next \`mcp-whoop login\`.`,
+	}),
+};
 
 /** Every complaint this environment earns, by variable name. */
 function complaintsIn(
@@ -160,12 +205,10 @@ function checklist(
 }
 
 /**
- * The problems with this environment that stand in `command`'s way, as the
- * user should read them: one line per misconfigured variable `command` reads,
- * in the order the schema declares them, or undefined when everything it reads
- * parses. A variable outside its surface ({@link LOGIN_ONLY}) is left to
- * {@link environmentWarnings}. Values are never echoed back — the checklist
- * names variables, and one of them is a secret.
+ * The problems that stop `command`, one checklist line per misconfigured
+ * variable in schema order, or undefined when nothing stands in its way.
+ * {@link DEMOTED} variables are left to {@link environmentWarnings}. Values
+ * are never echoed back — one of the variables is a secret.
  */
 export function environmentProblems(
 	env: NodeJS.ProcessEnv,
@@ -173,7 +216,7 @@ export function environmentProblems(
 ): string | undefined {
 	const lines = checklist(
 		complaintsIn(env),
-		(name) => command === "login" || !LOGIN_ONLY.has(name),
+		(name) => command === "login" || !(name in DEMOTED),
 	);
 	if (lines.length === 0) {
 		return undefined;
@@ -214,54 +257,44 @@ function strangerWarning(env: NodeJS.ProcessEnv): string | undefined {
 }
 
 /**
- * What a malformed {@link LOGIN_ONLY} variable earns under a command that
- * never reads it: the same checklist line `login` would refuse over, said as a
- * warning. The value is not silently swallowed — that is the failure this gate
- * exists to prevent — but it does not take down a command it has no bearing
- * on either.
+ * The warning each malformed {@link DEMOTED} variable earns under commands it
+ * does not stop: the checklist line `login` would refuse over, wrapped in
+ * what the running command loses by it. One block per variable, since what
+ * they cost differs.
  */
-function loginOnlyWarning(
-	env: NodeJS.ProcessEnv,
-	command: Command,
-): string | undefined {
+function demotedWarnings(env: NodeJS.ProcessEnv, command: Command): string[] {
 	if (command === "login") {
-		return undefined;
+		return [];
 	}
 
 	const complaints = complaintsIn(env);
-	const broken = Object.keys(environmentSchema.shape).filter(
-		(name) => LOGIN_ONLY.has(name) && (complaints[name]?.length ?? 0) > 0,
-	);
-	if (broken.length === 0) {
-		return undefined;
-	}
 
-	const one = broken.length === 1;
+	return Object.keys(environmentSchema.shape)
+		.filter((name) => name in DEMOTED && (complaints[name]?.length ?? 0) > 0)
+		.map((name) => {
+			const { cost, remedy } = DEMOTED[name](command);
 
-	return [
-		`Ignoring ${broken.join(", ")}: only \`login\` reads ${
-			one ? "it" : "them"
-		}, and \`login\` is not what is running.`,
-		...checklist(complaints, (name) => broken.includes(name)),
-		`\`${command}\` carries on. Fix ${
-			one ? "it" : "them"
-		} before the next \`mcp-whoop login\`.`,
-	].join("\n");
+			return [
+				cost,
+				...checklist(complaints, (other) => other === name),
+				remedy,
+			].join("\n");
+		});
 }
 
 /**
  * The warnings this environment earns under `command`, or undefined when it
- * earns none: a `WHOOP_*` name nothing reads, and a login-only variable
- * `command` will not be stopped by. Both are things worth saying that are not
- * worth refusing over.
+ * earns none: a `WHOOP_*` name nothing reads, and a variable `command` will not
+ * be stopped by. Both are things worth saying that are not worth refusing over.
  */
 export function environmentWarnings(
 	env: NodeJS.ProcessEnv,
 	command: Command,
 ): string | undefined {
-	const blocks = [strangerWarning(env), loginOnlyWarning(env, command)].filter(
-		(block) => block !== undefined,
-	);
+	const blocks = [
+		strangerWarning(env),
+		...demotedWarnings(env, command),
+	].filter((block) => block !== undefined);
 
 	return blocks.length > 0 ? blocks.join("\n\n") : undefined;
 }
