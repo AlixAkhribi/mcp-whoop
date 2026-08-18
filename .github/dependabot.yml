@@ -9,6 +9,14 @@ updates:
       default-days: 7
     commit-message:
       prefix: "build"  # No include: "scope" — the commit convention forbids scopes.
+    ignore:
+      # The type surface has to track the oldest runtime `engines.node` claims,
+      # which is the exact Node the PR workflow builds against. A newer major
+      # would let `tsc` accept APIs that do not exist on that floor, so the
+      # break would surface for users instead of in CI.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       dev-dependencies:
         dependency-type: "development"
