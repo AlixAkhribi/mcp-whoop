@@ -37,7 +37,7 @@ const SCORED_RECOVERY = {
 
 /**
  * A recovery WHOOP has not scored yet: `score: null`, an explicit null rather
- * than an absent field (observed 2026-08-02), until `score_state` reaches
+ * than an absent field, until `score_state` reaches
  * `SCORED`.
  */
 const PENDING_RECOVERY = {

@@ -379,7 +379,7 @@ describe("a tool call with no stored WHOOP login, over real stdio", () => {
 		const { store } = await loginThroughElicitation();
 
 		// The application rides along because WHOOP re-authenticates it on every
-		// refresh (ADR 0003).
+		// refresh.
 		expect(
 			JSON.parse(await readFile(join(store, "tokens.json"), "utf8")),
 		).toMatchObject({

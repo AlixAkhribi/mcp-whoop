@@ -11,7 +11,7 @@ import { whoopPageSchema, whoopScoreStateSchema } from "./common";
  * WHOOP's v2 `Cycle` record, in WHOOP's own field names. The upstream shape is
  * mirrored verbatim into the tool's structured output, so a model reading it
  * can rely on WHOOP's public documentation. WHOOP sends explicit nulls rather
- * than omitting fields (observed 2026-08-02): `end` is null while the cycle is
+ * than omitting fields: `end` is null while the cycle is
  * still open, and `score` until `score_state` reaches `SCORED`.
  */
 export const cycleSchema = z.object({
@@ -38,7 +38,7 @@ export type WhoopCycle = z.infer<typeof cycleSchema>;
 /**
  * One page of WHOOP's paginated cycle collection: the records, plus the token
  * that reaches the page after them. The last page carries `next_token: null` —
- * an explicit null (observed 2026-08-02), not an absent field.
+ * an explicit null, not an absent field.
  */
 export const cyclePageSchema = whoopPageSchema(cycleSchema);
 

@@ -57,7 +57,7 @@ export function readCredentials(
 
 /**
  * What a login records about the application it used: the pair WHOOP
- * re-authenticates on every refresh (ADR 0003) and the redirect URI consent
+ * re-authenticates on every refresh and the redirect URI consent
  * was granted at. Written identically by both login flows.
  */
 export function applicationRecord(app: WhoopAppCredentials): StoredApplication {

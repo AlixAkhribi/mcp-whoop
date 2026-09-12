@@ -19,10 +19,10 @@ import { whoopPageSchema, whoopScoreStateSchema } from "./common";
  * a sleep can read that cycle's strain or recovery without re-deriving the
  * cycle by date. The upstream shape is mirrored verbatim into the tool's
  * structured output, so a model reading it can rely on WHOOP's public
- * documentation. WHOOP sends explicit nulls rather than omitting fields
- * (observed 2026-08-02): `v1_id` is null for records born on v2, `score` until
- * `score_state` reaches `SCORED`, and the performance, consistency and
- * efficiency percentages until WHOOP has enough data to compute them.
+ * documentation. WHOOP sends explicit nulls rather than omitting fields:
+ * `v1_id` is null for records born on v2, `score` until `score_state` reaches
+ * `SCORED`, and the performance, consistency and efficiency percentages until
+ * WHOOP has enough data to compute them.
  *
  * A scored sleep promises only its sleep-needed and stage-summary blocks. The
  * respiratory rate is as optional as those percentages — a night WHOOP measured
@@ -77,7 +77,7 @@ export type WhoopSleep = z.infer<typeof sleepSchema>;
 /**
  * One page of WHOOP's paginated sleep collection: the records, plus the token
  * that reaches the page after them. The last page carries `next_token: null` —
- * an explicit null (observed 2026-08-02), not an absent field.
+ * an explicit null, not an absent field.
  */
 export const sleepPageSchema = whoopPageSchema(sleepSchema);
 
