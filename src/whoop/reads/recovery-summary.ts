@@ -6,6 +6,7 @@ import {
 } from "@/whoop/api/data/recoveries";
 import { withAuthorizedWhoopAccess } from "@/whoop/auth/tokens/authorized";
 import { RECOVERY_SUMMARY_SCOPES } from "@/whoop/auth/tokens/scopes";
+import { fetchSleepsNaming } from "./night-walk";
 import { collectPagesUntil } from "./pagination";
 import {
 	buildRecoverySummary,
@@ -66,8 +67,11 @@ export async function readRecoverySummary({
 			const recoveries = await fetchRecoveriesFor(accessToken, days, {
 				signal: requestSignal,
 			});
+			const sleeps = await fetchSleepsNaming(accessToken, cycles, {
+				signal: requestSignal,
+			});
 
-			return buildRecoverySummary(cycles, recoveries, days);
+			return buildRecoverySummary(cycles, recoveries, sleeps, days);
 		},
 		{ signal },
 	);

@@ -14,9 +14,9 @@ const SLEEP_LAST_WEEK_URI = "whoop://sleep/last-week";
 
 /**
  * The offset every seeded night carries — WHOOP's own `±HH:MM` form, and a
- * negative one on purpose: a night starting at 22:00 there is already the next
- * date in UTC, so a digest that labels a night by the record's own offset
- * reports the day seeded here and one labeling by UTC reports the day after.
+ * negative one on purpose: a night that ends at 06:00 there began the previous
+ * evening, so a digest labeling a night by the evening it started reports the
+ * day before the one seeded here.
  */
 const TIMEZONE_OFFSET = "-05:00";
 
@@ -25,16 +25,32 @@ const AWAKE_MILLI = 1_800_000;
 
 /** One night to seed, said in the terms the digest reports it back in. */
 type NightSeed = {
-	/** The local day it started on, at {@link TIMEZONE_OFFSET}. */
+	/**
+	 * The wake day that names it: the date it ended on, read at
+	 * {@link TIMEZONE_OFFSET}. The night itself began the evening before.
+	 */
 	day: string;
 	performance: number;
 	efficiency: number;
 	inBedMilli: number;
 };
 
-/** A scored night in WHOOP's own v2 shape, seeded onto one local day. */
+/**
+ * The instant a wall-clock time at {@link TIMEZONE_OFFSET} falls on — how a
+ * seeded night says where it began and ended in the terms it was lived in.
+ */
+function localInstant(local: string): string {
+	return new Date(`${local}${TIMEZONE_OFFSET}`).toISOString();
+}
+
+/**
+ * A scored night in WHOOP's own v2 shape, seeded onto the wake day that names
+ * it: it ends at 06:00 that morning at the offset the record carries, so it
+ * began the evening before.
+ */
 function scoredNight(seed: NightSeed): Record<string, unknown> {
-	const start = Date.parse(`${seed.day}T22:00:00.000${TIMEZONE_OFFSET}`);
+	const end = Date.parse(`${seed.day}T06:00:00.000${TIMEZONE_OFFSET}`);
+	const start = end - seed.inBedMilli;
 	const asleepMilli = seed.inBedMilli - AWAKE_MILLI;
 
 	return {
@@ -42,9 +58,9 @@ function scoredNight(seed: NightSeed): Record<string, unknown> {
 		v1_id: null,
 		user_id: 10_129,
 		created_at: new Date(start).toISOString(),
-		updated_at: new Date(start + seed.inBedMilli).toISOString(),
+		updated_at: new Date(end).toISOString(),
 		start: new Date(start).toISOString(),
-		end: new Date(start + seed.inBedMilli).toISOString(),
+		end: new Date(end).toISOString(),
 		timezone_offset: TIMEZONE_OFFSET,
 		nap: false,
 		score_state: "SCORED",
@@ -159,6 +175,36 @@ function textOf(item: unknown): string {
 }
 
 describe("the sleep digest as a resource, over real stdio", () => {
+	it("carries the tool's own wake days, in the tool's own bytes", async () => {
+		const whoopBaseUrl = await startFakeWhoop();
+		const store = await temporaryStore();
+		await seedStore(store);
+
+		const { called, read } = await withBuiltStdioClient(
+			{ store, whoopBaseUrl },
+			async (client) => ({
+				called: await client.callTool({
+					name: "get_sleep_summary",
+					arguments: {},
+				}),
+				read: await client.readResource({ uri: SLEEP_LAST_WEEK_URI }),
+			}),
+		);
+
+		const text = textOf(read.contents[0]);
+		const digest = JSON.parse(text) as { per_day: { day: string }[] };
+
+		// The newest night began at 20:00 on the 27th and is named the 28th, the
+		// morning it ended on — the same wake days the tool prints.
+		expect(NIGHTS[0].start).toBe(localInstant("2026-07-27T20:00:00.000"));
+		expect(digest.per_day.map((row) => row.day)).toEqual(
+			NIGHT_SEEDS.map((seed) => seed.day),
+		);
+		expect(digest.per_day.map((row) => row.day)).not.toContain("2026-07-21");
+		// And byte-identical to the tool's answer: one digest, rendered once.
+		expect(text).toBe(textOf((called.content as unknown[])[0]));
+	});
+
 	it("answers a read with the very text its tool answers with, unasked", async () => {
 		const whoopBaseUrl = await startFakeWhoop();
 		const store = await temporaryStore();

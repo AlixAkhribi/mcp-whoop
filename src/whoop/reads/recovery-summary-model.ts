@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import type { WhoopCycle } from "@/whoop/api/data/cycles";
 import type { WhoopRecovery } from "@/whoop/api/data/recoveries";
-import { getLocalDate } from "./day";
+import type { WhoopSleep } from "@/whoop/api/data/sleeps";
+import { getCycleWakeDate, openingSleepsByCycle } from "./day";
 import {
 	calculateSpread,
 	roundToHundredths,
@@ -31,16 +32,22 @@ export const recoverySummarySchema = z.object({
 export type RecoverySummary = z.infer<typeof recoverySummarySchema>;
 type RecoveryScore = NonNullable<WhoopRecovery["score"]>;
 
-/** Builds a recovery digest from already-fetched WHOOP records. */
+/**
+ * Builds a recovery digest from already-fetched WHOOP records. The sleeps are
+ * there to name the days: a cycle is labeled by the end of the sleep carrying
+ * its id, so the digest needs them beside the cycles it reports.
+ */
 export function buildRecoverySummary(
 	cycles: readonly WhoopCycle[],
 	recoveries: readonly WhoopRecovery[],
+	sleeps: readonly WhoopSleep[],
 	daysRequested: number,
 ): RecoverySummary {
 	const days = cycles.slice(0, daysRequested);
 	const recoveriesByCycle = new Map(
 		recoveries.map((recovery) => [recovery.cycle_id, recovery]),
 	);
+	const openingSleeps = openingSleepsByCycle(sleeps);
 	const matchedRecoveries = days
 		.map((cycle) => recoveriesByCycle.get(cycle.id))
 		.filter((recovery) => recovery !== undefined);
@@ -61,7 +68,7 @@ export function buildRecoverySummary(
 			const recovery = recoveriesByCycle.get(cycle.id);
 
 			return {
-				day: getLocalDate(cycle),
+				day: getCycleWakeDate(cycle, openingSleeps.get(cycle.id)),
 				score_state: recovery?.score_state ?? ("ABSENT" as const),
 				recovery_score: recovery?.score?.recovery_score ?? null,
 				hrv_rmssd_milli: recovery?.score?.hrv_rmssd_milli ?? null,

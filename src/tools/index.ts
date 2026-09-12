@@ -80,10 +80,12 @@ export function registerTools(
 	if (grantAllows(grantedScopes, ...SLEEP_SUMMARY_SCOPES)) {
 		registerGetSleepSummaryTool(server);
 	}
-	// A summary reading two listings needs both grants: half of them would only
-	// buy a tool that fails on the read it was not allowed to make. The same
-	// two a read of the `whoop://recovery/last-week` resource demands when it
-	// runs.
+	// A summary reading three listings needs all three grants: the cycles it
+	// reports, the recoveries it digests, and the sleeps whose ends name the
+	// days. Fewer would only buy a tool that fails on the read it
+	// was not allowed to make — or, worse, one whose dates moved with the
+	// grant. The same three a read of the `whoop://recovery/last-week`
+	// resource demands when it runs.
 	if (grantAllows(grantedScopes, ...RECOVERY_SUMMARY_SCOPES)) {
 		registerGetRecoverySummaryTool(server);
 	}
