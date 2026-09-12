@@ -6,6 +6,19 @@ const USER_ID = 10_129;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
+/** The local clock time a fixture night ends at — the wake that names its day. */
+const WAKE_AT = "06:00:00";
+
+/** How long a fixture night lasts, onset to wake: eight hours in bed. */
+const IN_BED_MILLI = 28_800_000;
+
+/**
+ * One WHOOP cycle, bounded the way WHOOP bounds one: `day` is the
+ * wake day that names it — the morning the user was woken into it — so the
+ * cycle *starts* at sleep onset the evening before, where the sleep carrying
+ * its id starts, and runs to the next night's onset a day later. The newest
+ * cycle WHOOP holds is still running, which `open` says.
+ */
 export function buildCycle({
 	id = 93_845,
 	day = "2026-07-28",
@@ -17,7 +30,8 @@ export function buildCycle({
 	timezoneOffset?: string;
 	open?: boolean;
 } = {}): WhoopCycle {
-	const start = Date.parse(`${day}T06:00:00.000${timezoneOffset}`);
+	const start =
+		Date.parse(`${day}T${WAKE_AT}.000${timezoneOffset}`) - IN_BED_MILLI;
 
 	return {
 		id,
@@ -75,13 +89,21 @@ export function buildRecovery({
 	};
 }
 
+/**
+ * One WHOOP sleep record, described the way WHOOP files one: `day`
+ * is the wake day — the date the sleep *ended* on, read at the offset it
+ * carries — and `wakeAt` is the local clock time it ended at. A night therefore
+ * starts `inBedMilli` earlier, the evening before the morning that names it,
+ * which is the record WHOOP actually holds.
+ */
 export function buildSleep({
 	id = "sleep-2026-07-28",
 	cycleId = 93_845,
 	day = "2026-07-28",
 	timezoneOffset = "+00:00",
+	wakeAt = WAKE_AT,
 	nap = false,
-	inBedMilli = 28_800_000,
+	inBedMilli = IN_BED_MILLI,
 	performance = 76,
 	efficiency = 88,
 	scoreState = "SCORED",
@@ -90,13 +112,15 @@ export function buildSleep({
 	cycleId?: number;
 	day?: string;
 	timezoneOffset?: string;
+	wakeAt?: string;
 	nap?: boolean;
 	inBedMilli?: number;
 	performance?: number;
 	efficiency?: number;
 	scoreState?: WhoopSleep["score_state"];
 } = {}): WhoopSleep {
-	const start = Date.parse(`${day}T22:00:00.000${timezoneOffset}`);
+	const end = Date.parse(`${day}T${wakeAt}.000${timezoneOffset}`);
+	const start = end - inBedMilli;
 	const awakeMilli = 1_800_000;
 	const lightMilli = 12_000_000;
 	const swsMilli = 6_000_000;
@@ -107,9 +131,9 @@ export function buildSleep({
 		v1_id: null,
 		user_id: USER_ID,
 		created_at: new Date(start).toISOString(),
-		updated_at: new Date(start + inBedMilli).toISOString(),
+		updated_at: new Date(end).toISOString(),
 		start: new Date(start).toISOString(),
-		end: new Date(start + inBedMilli).toISOString(),
+		end: new Date(end).toISOString(),
 		timezone_offset: timezoneOffset,
 		nap,
 		score_state: scoreState,
@@ -177,19 +201,28 @@ export function buildSleepWeek(): WhoopSleep[] {
 
 	return [
 		...nights,
+		// An afternoon nap, ending on the wake day the third night is named by.
 		buildSleep({
 			id: "nap-2026-07-26",
 			cycleId: 93_843,
 			day: "2026-07-26",
+			wakeAt: "14:00:00",
 			nap: true,
 			inBedMilli: 3_600_000,
 		}),
 	];
 }
 
+/**
+ * A week of cycle-days as WHOOP holds one: the cycles, the recoveries scored
+ * against them, and the nights that opened them — each night starting where
+ * its cycle starts and ending the morning that names the day, so a digest
+ * labeling a cycle by its opening sleep has the sleep to label it by.
+ */
 export function buildRecoveryWeek(): {
 	cycles: WhoopCycle[];
 	recoveries: WhoopRecovery[];
+	sleeps: WhoopSleep[];
 } {
 	const days = [
 		"2026-07-28",
@@ -213,6 +246,9 @@ export function buildRecoveryWeek(): {
 				hrvMilli: 49.5 - index * 3,
 				restingHeartRate: 68 - index * 3,
 			}),
+		),
+		sleeps: days.map((day, index) =>
+			buildSleep({ id: `sleep-${day}`, cycleId: 93_845 - index, day }),
 		),
 	};
 }

@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-
+import {
+	buildDaySnapshot,
+	daySnapshotSchema,
+} from "@/whoop/reads/day-snapshot-model";
 import { buildRecoverySummary } from "@/whoop/reads/recovery-summary-model";
 import { buildSleepSummary } from "@/whoop/reads/sleep-summary-model";
-import {
-	buildTodaySnapshot,
-	todaySnapshotSchema,
-} from "@/whoop/reads/today-snapshot";
 import {
 	buildRecovery,
 	buildRecoveryWeek,
@@ -17,10 +16,10 @@ describe("pure application read models", () => {
 	it("builds today's fixed join shape without auth or I/O", () => {
 		const { cycle, recovery, sleep } = buildTodayRecords();
 
-		const scored = buildTodaySnapshot(cycle, recovery, sleep);
-		const absent = buildTodaySnapshot(cycle, null, null);
+		const scored = buildDaySnapshot(cycle, recovery, sleep);
+		const absent = buildDaySnapshot(cycle, null, null);
 
-		expect(todaySnapshotSchema.parse(scored)).toEqual(scored);
+		expect(daySnapshotSchema.parse(scored)).toEqual(scored);
 		expect(scored).toMatchObject({
 			recovery_state: "SCORED",
 			recovery,
@@ -67,9 +66,9 @@ describe("pure application read models", () => {
 	});
 
 	it("joins recoveries to cycle days and calculates scored spreads", () => {
-		const { cycles, recoveries } = buildRecoveryWeek();
+		const { cycles, recoveries, sleeps } = buildRecoveryWeek();
 
-		const summary = buildRecoverySummary(cycles, recoveries, 7);
+		const summary = buildRecoverySummary(cycles, recoveries, sleeps, 7);
 
 		expect(summary).toMatchObject({
 			days_requested: 7,
@@ -87,11 +86,11 @@ describe("pure application read models", () => {
 	});
 
 	it("reports pending and absent recovery joins without inventing scores", () => {
-		const { cycles, recoveries } = buildRecoveryWeek();
+		const { cycles, recoveries, sleeps } = buildRecoveryWeek();
 		recoveries[0] = buildRecovery({ scoreState: "PENDING_SCORE" });
 		recoveries.pop();
 
-		const summary = buildRecoverySummary(cycles, recoveries, 7);
+		const summary = buildRecoverySummary(cycles, recoveries, sleeps, 7);
 
 		expect(summary.days_with_records).toBe(6);
 		expect(summary.days_scored).toBe(5);

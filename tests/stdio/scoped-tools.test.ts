@@ -81,12 +81,14 @@ const GRANT_CASES = [
 		visible: ["get_workout", "list_workouts"],
 	},
 	{
-		label: "recovery summary",
+		// Two of the three scopes the recovery digest is named and scored from:
+		// its rows are dated by the sleeps that opened those cycles, so this
+		// grant buys the mapping tools and no summary at all.
+		label: "cycles and recovery",
 		granted: ["read:cycles", "read:recovery"],
 		visible: [
 			"get_cycle",
 			"get_cycle_recovery",
-			"get_recovery_summary",
 			"list_cycles",
 			"list_recoveries",
 		],

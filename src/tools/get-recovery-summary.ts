@@ -28,7 +28,7 @@ export function registerGetRecoverySummaryTool(server: McpServer): void {
 		{
 			title: "WHOOP recovery summary",
 			description:
-				"Summarizes the most recent days of WHOOP recovery for the user this server is logged in as (7 by default, 30 at most): how many of those days WHOOP holds and has scored a recovery for, the mean, low and high of recovery score, heart rate variability and resting heart rate across them, and one row per day, newest first. A day is one physiological cycle, labeled by the cycle's start in the user's own timezone.",
+				"Summarizes the most recent days of WHOOP recovery for the user this server is logged in as (7 by default, 30 at most): how many of those days WHOOP holds and has scored a recovery for, the mean, low and high of recovery score, heart rate variability and resting heart rate across them, and one row per day, newest first. A day is one physiological cycle, labeled by the morning the user woke into it, in their own timezone.",
 			inputSchema: getRecoverySummaryInputSchema,
 			outputSchema: recoverySummarySchema,
 			annotations: READ_ONLY_TOOL_ANNOTATIONS,

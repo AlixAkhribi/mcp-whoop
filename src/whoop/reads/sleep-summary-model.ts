@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { WhoopSleep } from "@/whoop/api/data/sleeps";
-import { getLocalDate } from "./day";
+import { getWakeDate } from "./day";
 import { calculateSpread, roundToHundredths, spreadSchema } from "./spread";
 
 export const sleepSummarySchema = z.object({
@@ -46,12 +46,14 @@ export function buildSleepSummary(
 ): SleepSummary {
 	const nights = sleeps.filter((sleep) => !sleep.nap).slice(0, daysRequested);
 	const oldestNight = nights.at(-1);
+	// The window the digest speaks for, in the same wake days its rows are
+	// named by: a nap counts when it ends on or after the morning the oldest
+	// night in the window ended on.
 	const oldestDay =
-		oldestNight === undefined ? undefined : getLocalDate(oldestNight);
+		oldestNight === undefined ? undefined : getWakeDate(oldestNight);
 	const naps = sleeps.filter(
 		(sleep) =>
-			sleep.nap &&
-			(oldestDay === undefined || getLocalDate(sleep) >= oldestDay),
+			sleep.nap && (oldestDay === undefined || getWakeDate(sleep) >= oldestDay),
 	);
 	const scored = nights
 		.map((night) => night.score)
@@ -96,7 +98,7 @@ export function buildSleepSummary(
 			),
 		},
 		per_day: nights.map((night) => ({
-			day: getLocalDate(night),
+			day: getWakeDate(night),
 			score_state: night.score_state,
 			sleep_performance_percentage:
 				night.score?.sleep_performance_percentage ?? null,
