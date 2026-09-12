@@ -121,7 +121,7 @@ const environmentSchema = z.object({
 	),
 	WHOOP_LOGIN_WAIT_MS: unsetWhenBlank(
 		duration(
-			"how long a tool call waits for a login it offered inside a conversation before asking the client to come back",
+			"how long a call or a read waits for a login it offered inside a conversation before asking the client to come back",
 			DEFAULT_LOGIN_WAIT_MS,
 		),
 	),
@@ -166,7 +166,7 @@ const DEMOTED: Record<string, (command: Command) => Demotion> = {
 	WHOOP_REDIRECT_URI: (command) =>
 		command === "stdio"
 			? {
-					cost: "WHOOP_REDIRECT_URI does not parse, so no WHOOP login can be offered inside a conversation: a tool call that finds no stored login is answered with instructions to log in from a terminal instead.",
+					cost: "WHOOP_REDIRECT_URI does not parse, so no WHOOP login can be offered inside a conversation: a tool call or a resource read that finds no stored login is answered with instructions to log in from a terminal instead.",
 					remedy:
 						"`stdio` serves on regardless. Fix it to have that offer back, and before the next `mcp-whoop login`, which does refuse over it.",
 				}

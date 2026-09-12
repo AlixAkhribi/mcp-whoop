@@ -1,7 +1,15 @@
 /**
- * @file Wraps tool handlers so a call with no usable WHOOP login answers with
- * a URL-mode elicitation carrying WHOOP's consent screen, instead of prose
+ * @file Wraps a served handler so a request with no usable WHOOP login answers
+ * with a URL-mode elicitation carrying WHOOP's consent screen, instead of prose
  * telling the user to find a terminal.
+ *
+ * It sits in `lib/` beside the observed seam, and for the same reason: both
+ * surfaces have to behave identically here. A tool call and a resource read
+ * fail the same way when nothing is logged in, so one wrapper — and therefore
+ * one policy about who may be offered a link, and when — governs both. Which
+ * argument carries the request is the protocol library's business, not this
+ * seam's, so the context is found among the arguments rather than assumed at a
+ * position; a handler given none can be told nothing, and its failure stands.
  *
  * The offer is only made when the client can open URLs, this machine can
  * finish the login, and nobody has already declined one; otherwise the
@@ -95,8 +103,8 @@ function goOnWaiting(requestState: string): InputRequiredResult {
 
 /**
  * How a client says its user is not going to WHOOP. Either one ends the
- * attempt, but only a decline — a decision, where a cancel is the absence of
- * one — suppresses future offers.
+ * attempt it answers, but only a decline — a decision, where a cancel is the
+ * absence of one — suppresses future offers.
  */
 type Refusal = "decline" | "cancel";
 
@@ -139,7 +147,7 @@ type Handled<R> =
  * Runs the handler, catching only {@link LoginRequiredError}; anything else
  * is left to throw.
  */
-async function handled<A extends [unknown, ServerContext], R>(
+async function handled<A extends unknown[], R>(
 	handler: (...args: A) => Promise<R>,
 	args: A,
 ): Promise<Handled<R>> {
@@ -155,19 +163,56 @@ async function handled<A extends [unknown, ServerContext], R>(
 }
 
 /**
- * Wraps a tool handler so a call with no usable login answers with a
- * consent-link elicitation instead of failing. The handler runs first on
- * every round, the retry included: the token store is the only ground truth,
- * and the login may have landed by any route since the last read. A retry
- * that arrives before WHOOP's redirect waits briefly on the attempt it names;
- * a decline suppresses further offers for the life of the process.
+ * Whether this argument is the request itself: recognised by the accessor
+ * every served context carries, so a handler's own arguments cannot be
+ * mistaken for one by having a field of the same name.
  */
-export function offeringWhoopLogin<A extends [unknown, ServerContext], R>(
+function isRequestContext(argument: unknown): argument is ServerContext {
+	return (
+		typeof argument === "object" &&
+		argument !== null &&
+		"mcpReq" in argument &&
+		typeof (argument as ServerContext).mcpReq?.requestState === "function"
+	);
+}
+
+/**
+ * The request these arguments were served for. The protocol library hands the
+ * context to a tool as the second argument and to a resource read as the second
+ * too, but a template read takes its variables in between — so it is found by
+ * what it carries rather than by where it sits, and the last one wins, since
+ * the request is always the final thing a handler is told about.
+ */
+function requestContextIn(args: readonly unknown[]): ServerContext | undefined {
+	return args.filter(isRequestContext).at(-1);
+}
+
+/**
+ * Wraps a served handler so a request with no usable login answers with a
+ * consent-link elicitation instead of failing — a tool call and a resource
+ * read alike. The handler runs first on every round, the retry included: the
+ * token store is the only ground truth, and the login may have landed by any
+ * route since the last read. A retry that arrives before WHOOP's redirect
+ * waits briefly on the attempt it names; declining an attempt this process
+ * offered suppresses further offers for the life of the process.
+ *
+ * A handler invoked with no request context among its arguments cannot be
+ * offered anything — there is no client to ask and no round to carry an
+ * answer — so its login failure stands as it did before.
+ */
+export function offeringWhoopLogin<A extends unknown[], R>(
 	handler: (...args: A) => Promise<R>,
 ): (...args: A) => Promise<R | InputRequiredResult> {
 	return async (...args) => {
 		const first = await handled(handler, args);
-		const ctx = args[1];
+		const ctx = requestContextIn(args);
+		if (!ctx) {
+			if (first.served) {
+				return first.result;
+			}
+
+			throw first.loginRequired;
+		}
 		const requestState = ctx.mcpReq.requestState<string>();
 		if (first.served) {
 			// A served retry still naming an attempt got its login by another
@@ -178,20 +223,25 @@ export function offeringWhoopLogin<A extends [unknown, ServerContext], R>(
 			return first.result;
 		}
 		// Refusals are read only after the handler ran — a login the browser
-		// finished is served whatever the client says about the link — and only
-		// from rounds naming an attempt: a refusal carried with no state answers
-		// an elicitation nobody sent, and decides nothing.
+		// finished is served whatever the client says about the link. A refusal
+		// matters only when its state ends an attempt this process still holds: an
+		// absent, altered, or stale name answers no elicitation of ours and decides
+		// nothing about later offers.
 		const refusal =
 			typeof requestState === "string" && requestState !== ""
 				? refusedConsent(ctx)
 				: undefined;
 		if (refusal) {
-			log.info("the WHOOP consent link was refused: ending the login attempt");
-			// Only a decline — a user's decision — suppresses future offers.
-			if (refusal === "decline") {
-				rememberDecline();
+			const ended = await endLoginAttempt(requestState);
+			if (ended) {
+				log.info(
+					"the WHOOP consent link was refused: ending the login attempt",
+				);
+				// Only a decline — a user's decision — suppresses future offers.
+				if (refusal === "decline") {
+					rememberDecline();
+				}
 			}
-			await endLoginAttempt(requestState);
 
 			throw first.loginRequired;
 		}

@@ -1,6 +1,6 @@
 /**
- * @file ADR 0003's application precedence between the environment and the
- * store, asked of the two paths that depend on it: the login offered inside a
+ * @file The application precedence between the environment and the store,
+ * asked of the two paths that depend on it: the login offered inside a
  * conversation, and the refresh that keeps one alive.
  */
 
@@ -44,7 +44,7 @@ const ENVIRONMENT_APP = {
 
 /**
  * A token store holding a live login. Omitting `application` is what a store
- * written before ADR 0003 looks like.
+ * written before the application was recorded beside the tokens looks like.
  */
 async function storeHolding(application?: StoredApplication): Promise<string> {
 	const store = await temporaryStore();
@@ -69,7 +69,9 @@ async function storeHolding(application?: StoredApplication): Promise<string> {
 async function offerFrom(env: NodeJS.ProcessEnv): Promise<StartedLogin> {
 	const started = await startLoginAttempt(env);
 	if (started.started) {
-		deferCleanup(() => endLoginAttempt(started.attempt.requestState));
+		deferCleanup(async () => {
+			await endLoginAttempt(started.attempt.requestState);
+		});
 	}
 
 	return started;
@@ -150,7 +152,7 @@ describe("the application a login offer is minted from", () => {
 
 		const url = authorizeUrl(await offerFrom({ WHOOP_TOKEN_STORE: store }));
 
-		// With no WHOOP variables in the environment (ADR 0003), the store is the
+		// With no WHOOP variables in the environment, the store is the
 		// only source of the application and the address WHOOP may return to.
 		expect(url.searchParams.get("client_id")).toBe(STORED_APP.clientId);
 		expect(url.searchParams.get("redirect_uri")).toBe(redirectUri);
@@ -174,7 +176,7 @@ describe("the application a login offer is minted from", () => {
 		);
 		await playBrowser(url);
 
-		// A complete environment pair outranks the stored one (ADR 0003), and does
+		// A complete environment pair outranks the stored one, and does
 		// so whole: id, redirect URI and secret are all the environment's.
 		expect(url.searchParams.get("client_id")).toBe(
 			ENVIRONMENT_APP.WHOOP_CLIENT_ID,
@@ -201,7 +203,7 @@ describe("the application a login offer is minted from", () => {
 		);
 		await playBrowser(url);
 
-		// A partial environment pair contributes nothing (ADR 0003): this id with
+		// A partial environment pair contributes nothing: this id with
 		// the store's secret would authenticate as neither application.
 		expect(url.searchParams.get("client_id")).toBe(STORED_APP.clientId);
 		expect(url.searchParams.get("redirect_uri")).toBe(redirectUri);

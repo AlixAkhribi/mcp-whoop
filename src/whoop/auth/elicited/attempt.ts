@@ -79,7 +79,7 @@ async function completeLogin(
 	});
 	// The application is stored with the tokens: WHOOP re-authenticates it on
 	// every refresh, and the process may restart without the environment that
-	// configured it (ADR 0003).
+	// configured it.
 	await writeStoredTokens(
 		{ ...tokens, application: applicationRecord(app) },
 		{ env },
@@ -119,24 +119,27 @@ function release(store: string, starting: Promise<StartedLogin>): void {
 
 /**
  * Ends the attempt the given name stands for: closes the listener, releases
- * the port, and frees the store for a new attempt. A name that matches no
- * attempt ends nothing, which is why a client-supplied value is safe to take
- * at face value. Ending resolves `over` for every call that joined.
+ * the port, and frees the store for a new attempt. Returns whether it actually
+ * ended one; a name that matches no attempt ends nothing and says so in its
+ * return value, which is why a client-supplied value is safe to take at face
+ * value. Ending resolves `over` for every call that joined.
  */
 export async function endLoginAttempt(
 	requestState: string | undefined,
-): Promise<void> {
+): Promise<boolean> {
 	if (requestState === undefined) {
-		return;
+		return false;
 	}
 	const attempt = inFlight.get(requestState);
 	if (!attempt) {
-		return;
+		return false;
 	}
 	inFlight.delete(requestState);
 	// A store holds one attempt at a time, so the perStore entry is this one's.
 	perStore.delete(attempt.store);
 	await attempt.end();
+
+	return true;
 }
 
 /**
@@ -380,7 +383,9 @@ async function openLoginAttempt(
 		ended = resolve;
 	});
 	const over = Promise.race([
-		capture.answered.then(() => endLoginAttempt(requestState)),
+		capture.answered.then(async () => {
+			await endLoginAttempt(requestState);
+		}),
 		explicitlyEnded,
 	]);
 	inFlight.set(requestState, {
