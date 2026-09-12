@@ -397,11 +397,11 @@ describe("a WHOOP consent link declined by a round naming no attempt", () => {
 });
 
 describe("a WHOOP consent link declined under the name of an attempt already over", () => {
-	it("still stands: a late decline is the user's answer, and the offers stop", async () => {
+	it("decides nothing: a late decline names no attempt of this process, and offers go on", async () => {
 		const whoop = await startFakeWhoop();
 		const store = await temporaryStore();
 
-		const { refused, next } = await withOfferableServer(
+		const { refused, next, stale } = await withOfferableServer(
 			{ store, whoop },
 			async (client) => {
 				const offer = await callRound(client, "get_profile");
@@ -420,17 +420,19 @@ describe("a WHOOP consent link declined under the name of an attempt already ove
 
 				return {
 					refused,
+					stale,
 					next: await callRound(client, "get_body_measurements"),
 				};
 			},
 		);
 
 		expect(refused.isError).toBe(true);
-		// The decline was honoured although the attempt it named was already over.
-		expect(next.resultType).not.toBe("input_required");
-		expect(next.inputRequests).toBeUndefined();
-		expect(next.isError).toBe(true);
-		expect(textOf(next)).toContain("npx mcp-whoop login");
+		// The cancel already ended that attempt, so its old name authenticates no
+		// later answer: a fresh attempt is offered under a fresh name.
+		expect(next.resultType).toBe("input_required");
+		expect(Object.keys(next.inputRequests ?? {})).toEqual([WHOOP_LOGIN]);
+		expect(next.requestState).toMatch(/\S{16,}/);
+		expect(next.requestState).not.toBe(stale);
 	});
 });
 

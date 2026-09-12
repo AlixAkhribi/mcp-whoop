@@ -10,8 +10,8 @@ import type {
 	ServerContext,
 } from "@modelcontextprotocol/server";
 
+import { offeringWhoopLogin } from "@/lib/login-offer";
 import { observed } from "@/lib/observed";
-import { offeringWhoopLogin } from "./login-offer";
 
 /**
  * Wraps a tool handler with redaction and stderr narration: the call at
@@ -20,7 +20,8 @@ import { offeringWhoopLogin } from "./login-offer";
  * as the same string.
  *
  * A call that finds no usable WHOOP login answers with a consent link where
- * the client can show one (`./login-offer.ts`).
+ * the client can show one (`src/lib/login-offer.ts`) — the same offer, under
+ * the same policy, that a resource read is answered with.
  */
 export function observedTool<A extends [unknown, ServerContext], R>(
 	name: string,
