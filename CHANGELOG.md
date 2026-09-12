@@ -1,3 +1,17 @@
+# [0.8.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.7.0...v0.8.0) (2026-09-12)
+
+
+### Bug Fixes
+
+* label a day by the morning its opening sleep ended ([0b358af](https://github.com/AlixAkhribi/mcp-whoop/commit/0b358af8225a85beff71646a0370191531635ece))
+
+
+### Features
+
+* complete {date} with the user's recent wake days ([01b1f9f](https://github.com/AlixAkhribi/mcp-whoop/commit/01b1f9f2d687fa7d60ecffbb9d4c11d074c30807))
+* offer the consent link when a resource is read without a login ([a87b1d4](https://github.com/AlixAkhribi/mcp-whoop/commit/a87b1d44f0998abfd64a2992b452bc2dab4fa873))
+* read a past day by its wake date at whoop://day/{date} ([35ed9e6](https://github.com/AlixAkhribi/mcp-whoop/commit/35ed9e6264b6d47b95fe11fd2544763e81c61f33))
+
 # [0.7.0](https://github.com/AlixAkhribi/mcp-whoop/compare/v0.6.0...v0.7.0) (2026-08-17)
 
 
