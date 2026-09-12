@@ -15,6 +15,23 @@ import {
 /** The resource this suite is about: the snapshot heading the curated set. */
 const TODAY_URI = "whoop://today";
 
+/**
+ * The date today's cycle is being lived under: the night carrying its id ends
+ * at 05:25 on the 4th where it was lived, so the morning the user woke into
+ * the open cycle is the 4th — the date their WHOOP app shows.
+ */
+const TODAY_DATE = "2026-08-04";
+
+/** Today addressed the way any other day is: by the morning it was woken into. */
+const TODAY_DAY_URI = `whoop://day/${TODAY_DATE}`;
+
+/**
+ * The label the open cycle falls back to while WHOOP has filed no opening
+ * sleep for it: the date its own start falls on, read at the offset it carries
+ * — 21:25 on the 3rd, the evening it began.
+ */
+const FALLBACK_DAY_URI = "whoop://day/2026-08-03";
+
 /** A `whoop://` URI this server serves nothing at — a client's typo or guess. */
 const UNKNOWN_URI = "whoop://yesterday";
 
@@ -23,15 +40,17 @@ const TIMEZONE_OFFSET = "-05:00";
 
 /**
  * Today's cycle in WHOOP's own v2 shape: the newest one, still running —
- * `end: null`, an explicit null rather than an absent field (observed
- * 2026-08-02) — and scored while it runs, so its strain is the strain so far.
+ * `end: null`, an explicit null rather than an absent field — and scored
+ * while it runs, so its strain is the strain so far.
+ * It opens where the night carrying its id opens, since WHOOP bounds a cycle
+ * at sleep onset: the evening before the morning that names the day.
  */
 const OPEN_CYCLE = {
 	id: 93_845,
 	user_id: 10_129,
-	created_at: "2026-08-04T11:25:44.774Z",
+	created_at: "2026-08-04T03:25:44.774Z",
 	updated_at: "2026-08-04T14:25:44.774Z",
-	start: "2026-08-04T10:25:44.774Z",
+	start: "2026-08-04T02:25:44.774Z",
 	end: null,
 	timezone_offset: TIMEZONE_OFFSET,
 	score_state: "SCORED",
@@ -47,10 +66,10 @@ const OPEN_CYCLE = {
 const CLOSED_CYCLE = {
 	...OPEN_CYCLE,
 	id: 93_844,
-	created_at: "2026-08-03T11:25:44.774Z",
-	updated_at: "2026-08-03T14:25:44.774Z",
-	start: "2026-08-03T10:25:44.774Z",
-	end: "2026-08-04T10:25:44.774Z",
+	created_at: "2026-08-03T03:25:44.774Z",
+	updated_at: "2026-08-04T02:25:44.774Z",
+	start: "2026-08-03T02:25:44.774Z",
+	end: "2026-08-04T02:25:44.774Z",
 };
 
 /**
@@ -115,9 +134,15 @@ const SCORED_RECOVERY = {
  * How the stand-in WHOOP answers: the cycle listing newest first — today's
  * open cycle at its head — and each join hanging off that cycle.
  */
-function answerFor(url: URL): unknown {
+function answerFor(
+	url: URL,
+	sleepListing: readonly unknown[] = [ONSET_SLEEP],
+): unknown {
 	if (url.pathname === "/developer/v2/cycle") {
 		return { records: [OPEN_CYCLE, CLOSED_CYCLE], next_token: null };
+	}
+	if (url.pathname === "/developer/v2/activity/sleep") {
+		return { records: sleepListing, next_token: null };
 	}
 	if (url.pathname === `/developer/v2/cycle/${OPEN_CYCLE.id}/recovery`) {
 		return SCORED_RECOVERY;
@@ -131,14 +156,22 @@ function answerFor(url: URL): unknown {
 
 /**
  * A stand-in WHOOP holding today's open cycle, its recovery and its onset
- * sleep — the whole day a snapshot speaks for.
+ * sleep — the whole day a snapshot speaks for. The nights are served as a
+ * collection too, since that is the only way anything addressing a day by its
+ * date can learn which morning a cycle was woken into; `sleepListing` is what
+ * that collection answers, so a case can take the night away without taking
+ * the day with it.
  */
-async function startFakeWhoop(): Promise<string> {
+async function startFakeWhoop({
+	sleepListing,
+}: {
+	sleepListing?: readonly unknown[];
+} = {}): Promise<string> {
 	const server = createServer((request, response) => {
 		const url = new URL(request.url ?? "/", "http://whoop.invalid");
 		request.resume();
 		request.on("end", () => {
-			const answer = answerFor(url);
+			const answer = answerFor(url, sleepListing);
 			response.writeHead(answer === undefined ? 404 : 200, {
 				"content-type": "application/json",
 				connection: "close",
@@ -320,6 +353,85 @@ describe("the today snapshot as a resource, over real stdio", () => {
 		// it is one person's day.
 		expect(result.ttlMs).toBe(0);
 		expect(result.cacheScope).toBe("private");
+	});
+});
+
+describe("today's own date, read as a day, over real stdio", () => {
+	it("answers today's date with the very text whoop://today answers with", async () => {
+		const whoopBaseUrl = await startFakeWhoop();
+		const store = await temporaryStore();
+		await seedStore(store);
+
+		const [todayText, dayText] = await withBuiltStdioClient(
+			{ store, whoopBaseUrl },
+			async (client) => {
+				const today = await client.readResource({ uri: TODAY_URI });
+				const day = await client.readResource({ uri: TODAY_DAY_URI });
+
+				return [textOf(today.contents[0]), textOf(day.contents[0])];
+			},
+		);
+
+		// Byte-identical, not merely equivalent, and from one connection to one
+		// WHOOP: the day being lived is reachable by its date like any other, and
+		// the two surfaces cannot disagree about it. The cycle still running has
+		// no end yet, which neither the window it is matched in nor the morning
+		// it is named by may be thrown by.
+		expect(dayText).toBe(todayText);
+	});
+
+	it("answers today's date with the very text the today tool answers with", async () => {
+		const whoopBaseUrl = await startFakeWhoop();
+		const store = await temporaryStore();
+		await seedStore(store);
+
+		const [toolText, dayText] = await withBuiltStdioClient(
+			{ store, whoopBaseUrl },
+			async (client) => {
+				const called = await client.callTool({
+					name: "get_today_snapshot",
+					arguments: {},
+				});
+				const day = await client.readResource({ uri: TODAY_DAY_URI });
+
+				return [
+					textOf((called.content as unknown[])[0]),
+					textOf(day.contents[0]),
+				];
+			},
+		);
+
+		// The third surface over the same day: a model that called the tool and a
+		// user who attached the date are holding one rendering, not two readings
+		// that happen to agree today.
+		expect(dayText).toBe(toolText);
+	});
+
+	it("answers an open cycle WHOOP has filed no opening sleep for by its start date", async () => {
+		// A night WHOOP has not filed yet — the state a morning spends before the
+		// sleep that opened the running cycle is written.
+		const whoopBaseUrl = await startFakeWhoop({ sleepListing: [] });
+		const store = await temporaryStore();
+		await seedStore(store);
+
+		const result = await withBuiltStdioClient(
+			{ store, whoopBaseUrl },
+			(client) => client.readResource({ uri: FALLBACK_DAY_URI }),
+		);
+
+		expect(JSON.parse(textOf(result.contents[0]))).toEqual({
+			// With no wake to be named by, the cycle falls back to the date its own
+			// start falls on — the evening of the 3rd, local — and is still the day
+			// this server speaks for.
+			cycle: OPEN_CYCLE,
+			// The recovery join answers for the cycle whether or not its night is
+			// filed, so the day carries the state that join reports.
+			recovery_state: "SCORED",
+			recovery: SCORED_RECOVERY,
+			// And the sleep is a state of the day, not an error: WHOOP has no
+			// record of it, so the day says so.
+			sleep: null,
+		});
 	});
 });
 

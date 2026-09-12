@@ -11,6 +11,17 @@ import {
 const TODAY_URI = "whoop://today";
 
 /**
+ * One member of the day family, addressed by its date: the same snapshot today
+ * answers for the open cycle, and so read under the same three scopes. A member
+ * rather than the pattern, because a grant judges a read and only a member is
+ * ever read.
+ */
+const DAY_URI = "whoop://day/2026-08-04";
+
+/** The pattern that member is advertised under — the family, never enumerated. */
+const DAY_URI_TEMPLATE = "whoop://day/{date}";
+
+/**
  * Every resource this server serves, in the canonical order `resources/list`
  * advertises: the 2026-07-28 revision has the listing name what is currently
  * available and forbids it varying with connection state, and the stored grant
@@ -44,6 +55,17 @@ async function listedUris(store: string): Promise<string[]> {
 	);
 }
 
+/** The URI patterns `resources/templates/list` advertises on this store. */
+async function listedTemplates(store: string): Promise<string[]> {
+	return withBuiltStdioClient(
+		{ store, whoopBaseUrl: NO_WHOOP_BASE_URL },
+		async (client) =>
+			(await client.listResourceTemplates()).resourceTemplates.map(
+				(template) => template.uriTemplate,
+			),
+	);
+}
+
 /** The JSON-RPC error a refused read comes back as. */
 type Refusal = { code: number; message: string; data?: unknown };
 
@@ -67,8 +89,10 @@ async function refusedRead(client: Client, uri: string): Promise<Refusal> {
 }
 
 /**
- * The three scopes today's snapshot is assembled from: it answers a cycle, the
- * recovery scored for it and the sleep that started it, all at once.
+ * The three scopes a day's snapshot is assembled from: it answers a cycle, the
+ * recovery scored for it and the sleep that started it, all at once. Today's is
+ * the open cycle and a member of the day family is any other, so both are read
+ * under exactly these.
  */
 const SNAPSHOT_SCOPES = ["read:cycles", "read:recovery", "read:sleep"];
 
@@ -84,9 +108,12 @@ const RESOURCE_SCOPE_CASES = [
 		missing: ["read:body_measurement"],
 	},
 	{
+		// The digest is named as well as scored: its rows are dated by the sleeps
+		// that opened those cycles, so a grant holding only the cycles is short
+		// two scopes, and the refusal says both.
 		uri: "whoop://recovery/last-week",
 		granted: ["read:cycles"],
-		missing: ["read:recovery"],
+		missing: ["read:recovery", "read:sleep"],
 	},
 	{
 		uri: "whoop://sleep/last-week",
@@ -141,6 +168,22 @@ describe("the resource listing standing whole over any grant, over real stdio", 
 	});
 });
 
+describe("the template listing standing whole over any grant, over real stdio", () => {
+	it("advertises whoop://day/{date} under a narrowed grant and under none", async () => {
+		const narrowed = await temporaryStore();
+		await seedStore(narrowed, ["read:cycles", "read:recovery"]);
+		// An empty store: no login, and so no grant a listing could be narrowed by.
+		const empty = await temporaryStore();
+
+		// The same rule the resource listing is held to, for the same reason: the
+		// 2026-07-28 revision forbids a listing varying with connection state, and
+		// the stored grant is exactly that. A family a grant may not read is still
+		// a family this server serves — the refusal belongs to the read.
+		expect(await listedTemplates(narrowed)).toEqual([DAY_URI_TEMPLATE]);
+		expect(await listedTemplates(empty)).toEqual([DAY_URI_TEMPLATE]);
+	});
+});
+
 describe("the granted scopes judging each resource read, over real stdio", () => {
 	it("refuses a read of whoop://today by naming the scope the login lacks", async () => {
 		const store = await temporaryStore();
@@ -157,6 +200,27 @@ describe("the granted scopes judging each resource read, over real stdio", () =>
 		// error a failed read is, carrying the scope that is missing and the one
 		// way to grant it. Decided from the store alone: the dead WHOOP port
 		// proves nothing was asked upstream.
+		expect(refusal.code).toBe(-32603);
+		expect(refusal.message).toContain("read:sleep");
+		expect(refusal.message).toContain("npx mcp-whoop login");
+	});
+
+	it("refuses a read of whoop://day/{date} by naming the scope the login lacks", async () => {
+		const store = await temporaryStore();
+		await seedStore(store, ["read:cycles", "read:recovery"]);
+
+		const refusal = await withBuiltStdioClient(
+			{ store, whoopBaseUrl: NO_WHOOP_BASE_URL },
+			(client) => refusedRead(client, DAY_URI),
+		);
+
+		// A member of the family is gated exactly as the fixed resources are: the
+		// date is well-formed and names a day this server would speak for, so this
+		// is not the invalid-params refusal a miss earns — it is the internal error
+		// a read the stored grant may not make comes back as, carrying the scope
+		// that is missing and the one way to grant it. The dead WHOOP port is the
+		// proof it was decided from the store alone: anything reaching upstream
+		// first would fail with WHOOP's unreachability instead.
 		expect(refusal.code).toBe(-32603);
 		expect(refusal.message).toContain("read:sleep");
 		expect(refusal.message).toContain("npx mcp-whoop login");
@@ -196,6 +260,43 @@ describe("the granted scopes judging each resource read, over real stdio", () =>
 		for (const scope of SNAPSHOT_SCOPES) {
 			expect(refusal.message).toContain(scope);
 		}
+		expect(refusal.message).toContain("npx mcp-whoop login");
+	});
+
+	it("names every missing scope when the grant covers none of a day read", async () => {
+		const store = await temporaryStore();
+		await seedStore(store, ["read:workout"]);
+
+		const refusal = await withBuiltStdioClient(
+			{ store, whoopBaseUrl: NO_WHOOP_BASE_URL },
+			(client) => refusedRead(client, DAY_URI),
+		);
+
+		expect(refusal.code).toBe(-32603);
+		// The whole of what a day is assembled from, not merely the first found
+		// wanting: a member of the family is the same snapshot today is, so one
+		// re-run of the login has to be able to fix the read outright.
+		for (const scope of SNAPSHOT_SCOPES) {
+			expect(refusal.message).toContain(scope);
+		}
+		expect(refusal.message).toContain("npx mcp-whoop login");
+	});
+
+	it("refuses a day read with the login command when nothing is logged in", async () => {
+		// An empty store: no login, and so no grant to judge the read by at all.
+		const store = await temporaryStore();
+
+		const refusal = await withBuiltStdioClient(
+			{ store, whoopBaseUrl: NO_WHOOP_BASE_URL },
+			(client) => refusedRead(client, DAY_URI),
+		);
+
+		// Absence of a login is this server unable to answer a day that may well
+		// exist — not the date naming nothing — so it stays the internal error
+		// every read refuses with when nothing is logged in, never the
+		// invalid-params answer a member that does not exist earns. There are no
+		// scopes to name here, only the command that grants them.
+		expect(refusal.code).toBe(-32603);
 		expect(refusal.message).toContain("npx mcp-whoop login");
 	});
 

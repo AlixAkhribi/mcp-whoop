@@ -1,45 +1,11 @@
-import { z } from "zod";
-
-import {
-	cycleSchema,
-	fetchCyclePage,
-	type WhoopCycle,
-} from "@/whoop/api/data/cycles";
-import {
-	fetchCycleRecoveryOrAbsent,
-	recoverySchema,
-	type WhoopRecovery,
-} from "@/whoop/api/data/recoveries";
-import {
-	fetchCycleSleepOrAbsent,
-	sleepSchema,
-	type WhoopSleep,
-} from "@/whoop/api/data/sleeps";
+import { fetchCyclePage, type WhoopCycle } from "@/whoop/api/data/cycles";
+import { fetchCycleRecoveryOrAbsent } from "@/whoop/api/data/recoveries";
+import { fetchCycleSleepOrAbsent } from "@/whoop/api/data/sleeps";
 import { withAuthorizedWhoopAccess } from "@/whoop/auth/tokens/authorized";
 import { TODAY_SNAPSHOT_SCOPES } from "@/whoop/auth/tokens/scopes";
+import { buildDaySnapshot, type DaySnapshot } from "./day-snapshot-model";
 
-export const todaySnapshotSchema = z.object({
-	cycle: cycleSchema,
-	recovery_state: z.enum(["SCORED", "PENDING_SCORE", "UNSCORABLE", "ABSENT"]),
-	recovery: recoverySchema.nullable(),
-	sleep: sleepSchema.nullable(),
-});
-
-type TodaySnapshot = z.infer<typeof todaySnapshotSchema>;
-
-/** Builds the fixed-shape view shared by the today tool and resource. */
-export function buildTodaySnapshot(
-	cycle: WhoopCycle,
-	recovery: WhoopRecovery | null,
-	sleep: WhoopSleep | null,
-): TodaySnapshot {
-	return {
-		cycle,
-		recovery_state: recovery?.score_state ?? ("ABSENT" as const),
-		recovery,
-		sleep,
-	};
-}
+export { daySnapshotSchema } from "./day-snapshot-model";
 
 const NO_CURRENT_CYCLE =
 	"WHOOP has no cycles for this user yet, so there is no current day to report.";
@@ -62,7 +28,7 @@ export async function readTodaySnapshot({
 	signal,
 }: {
 	signal?: AbortSignal;
-} = {}): Promise<TodaySnapshot> {
+} = {}): Promise<DaySnapshot> {
 	return withAuthorizedWhoopAccess(
 		TODAY_SNAPSHOT_SCOPES,
 		async ({ accessToken, signal: requestSignal }) => {
@@ -78,7 +44,7 @@ export async function readTodaySnapshot({
 				}),
 			]);
 
-			return buildTodaySnapshot(cycle, recovery, sleep);
+			return buildDaySnapshot(cycle, recovery, sleep);
 		},
 		{ signal },
 	);

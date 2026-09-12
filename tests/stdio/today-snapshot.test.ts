@@ -14,15 +14,17 @@ const TIMEZONE_OFFSET = "-05:00";
 
 /**
  * Today's cycle in WHOOP's own v2 shape: the newest one, still running —
- * `end: null`, an explicit null rather than an absent field (observed
- * 2026-08-02) — and scored while it runs, so its strain is the strain so far.
+ * `end: null`, an explicit null rather than an absent field — and scored
+ * while it runs, so its strain is the strain so far.
+ * It opens where the night carrying its id opens, since WHOOP bounds a cycle
+ * at sleep onset: the evening before the morning that names the day.
  */
 const OPEN_CYCLE = {
 	id: 93_845,
 	user_id: 10_129,
-	created_at: "2026-08-04T11:25:44.774Z",
+	created_at: "2026-08-04T03:25:44.774Z",
 	updated_at: "2026-08-04T14:25:44.774Z",
-	start: "2026-08-04T10:25:44.774Z",
+	start: "2026-08-04T02:25:44.774Z",
 	end: null,
 	timezone_offset: TIMEZONE_OFFSET,
 	score_state: "SCORED",
@@ -41,10 +43,10 @@ const OPEN_CYCLE = {
 const CLOSED_CYCLE = {
 	...OPEN_CYCLE,
 	id: 93_844,
-	created_at: "2026-08-03T11:25:44.774Z",
-	updated_at: "2026-08-03T14:25:44.774Z",
-	start: "2026-08-03T10:25:44.774Z",
-	end: "2026-08-04T10:25:44.774Z",
+	created_at: "2026-08-03T03:25:44.774Z",
+	updated_at: "2026-08-04T02:25:44.774Z",
+	start: "2026-08-03T02:25:44.774Z",
+	end: "2026-08-04T02:25:44.774Z",
 };
 
 /**
