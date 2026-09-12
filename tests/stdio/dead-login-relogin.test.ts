@@ -181,7 +181,7 @@ async function startFakeWhoop({
  * Seeds a login WHOOP will not renew: the access token is already expired, so
  * the next call must refresh, and the refresh token it would spend is the dead
  * one. The application and redirect URI ride along because that is what a login
- * records (ADR 0003), and all a server with no environment has to go on.
+ * records, and all a server with no environment has to go on.
  */
 async function seedDeadLogin(
 	store: string,

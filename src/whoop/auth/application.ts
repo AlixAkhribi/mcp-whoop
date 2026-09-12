@@ -1,7 +1,7 @@
 /**
  * @file Resolves which WHOOP application this process acts as, from the
  * environment and the application a login recorded beside the tokens. The
- * single home of ADR 0003's precedence rule, shared by token refresh and the
+ * single home of that precedence rule, shared by token refresh and the
  * elicited login so the two cannot disagree.
  */
 
@@ -38,7 +38,7 @@ function environmentPair(
  * whole credential pair.
  *
  * A complete environment pair outranks the recorded one, so a secret rotated
- * in WHOOP's dashboard reaches stores that predate the rotation (ADR 0003); a
+ * in WHOOP's dashboard reaches stores that predate the rotation; a
  * partial pair contributes nothing. The redirect URI resolves independently —
  * it is a callback address, not a credential — so an environment supplying
  * only a rotated pair keeps the redirect URI its login was granted at.

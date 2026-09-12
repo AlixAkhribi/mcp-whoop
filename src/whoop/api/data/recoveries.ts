@@ -16,7 +16,7 @@ import { whoopPageSchema, whoopScoreStateSchema } from "./common";
  * cycle it scores and the sleep it was computed from. The upstream shape is
  * mirrored verbatim into the tool's structured output, so a model reading it
  * can rely on WHOOP's public documentation. WHOOP sends explicit nulls rather
- * than omitting fields (observed 2026-08-02): `score` is null until
+ * than omitting fields: `score` is null until
  * `score_state` reaches `SCORED`, and the blood-oxygen and skin-temperature
  * readings are null on hardware that does not measure them.
  */
@@ -44,7 +44,7 @@ export type WhoopRecovery = z.infer<typeof recoverySchema>;
 /**
  * One page of WHOOP's paginated recovery collection: the records, plus the
  * token that reaches the page after them. The last page carries
- * `next_token: null` — an explicit null (observed 2026-08-02), not an absent
+ * `next_token: null` — an explicit null, not an absent
  * field.
  */
 export const recoveryPageSchema = whoopPageSchema(recoverySchema);

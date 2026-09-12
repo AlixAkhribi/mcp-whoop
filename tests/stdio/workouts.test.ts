@@ -15,7 +15,7 @@ const SECOND_PAGE_TOKEN = "MTIzOjEyMzEyMw";
 
 /**
  * A scored run in WHOOP's own v2 shape: a record born on v2, so `v1_id` is an
- * explicit null (observed 2026-08-02), carrying the sport WHOOP recognised it
+ * explicit null, carrying the sport WHOOP recognised it
  * as and the distance and altitude a run records.
  */
 const SCORED_RUN = {
@@ -53,7 +53,7 @@ const SCORED_RUN = {
 /**
  * A plain "activity" — the sport WHOOP files anything it cannot name under,
  * `sport_id: -1` — recording no distance and no altitude, which WHOOP reports
- * as explicit nulls rather than absent fields (observed 2026-08-02).
+ * as explicit nulls rather than absent fields.
  */
 const PLAIN_ACTIVITY = {
 	...SCORED_RUN,

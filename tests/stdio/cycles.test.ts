@@ -16,7 +16,7 @@ const SECOND_PAGE_TOKEN = "MTIzOjEyMzEyMw";
 /**
  * The newest cycle in WHOOP's own v2 shape: still open, the way the real
  * newest cycle always is — `end: null`, an explicit null rather than an absent
- * field (observed 2026-08-02) — and already scored while it runs.
+ * field — and already scored while it runs.
  */
 const OPEN_CYCLE = {
 	id: 93_845,

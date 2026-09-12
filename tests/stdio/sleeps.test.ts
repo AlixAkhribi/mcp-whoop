@@ -22,7 +22,7 @@ const ONSET_CYCLE_ID = 93_845;
 
 /**
  * A scored night in WHOOP's own v2 shape: a record born on v2, so `v1_id` is
- * an explicit null (observed 2026-08-02), carrying the cycle it belongs to, the
+ * an explicit null, carrying the cycle it belongs to, the
  * stage summary and the sleep-needed breakdown WHOOP computes for it.
  */
 const SCORED_NIGHT = {
@@ -64,7 +64,7 @@ const SCORED_NIGHT = {
 /**
  * An afternoon nap: `nap: true`, and short enough that WHOOP has no
  * consistency or performance to speak of — explicit nulls rather than absent
- * fields (observed 2026-08-02).
+ * fields.
  */
 const NAP = {
 	...SCORED_NIGHT,
