@@ -75,6 +75,20 @@ async function advertisedResourceUris(): Promise<string[]> {
 }
 
 /**
+ * The template patterns, in the canonical order this server advertises them —
+ * read from `resources/templates/list`, the listing the plain resource set
+ * never folds a family into, so a template that lands without documentation
+ * fails below the same way an undocumented resource does.
+ */
+async function advertisedTemplatePatterns(): Promise<string[]> {
+	return advertised(registerResources, async (client) =>
+		(await client.listResourceTemplates()).resourceTemplates.map(
+			(template) => template.uriTemplate,
+		),
+	);
+}
+
+/**
  * What one README heading covers: every line under it, up to the next heading
  * of the same or a higher level. Reading a named section rather than the whole
  * file is what makes these cases about the data-surface documentation, not
@@ -117,14 +131,44 @@ describe("the README's data-surface documentation", () => {
 		const documented = section(readme, "Summary tools");
 
 		// A day is WHOOP's, not the calendar's — the rule every summary is read
-		// through, and the one a model would otherwise guess wrong.
+		// through, and the one a model would otherwise guess wrong. It is named by
+		// the morning the user woke into it, never by the evening the cycle began:
+		// the onset WHOOP bounds a cycle at is a boundary, not a label.
 		expect(documented).toMatch(/physiological cycle/i);
-		expect(documented).toMatch(/wake to wake/i);
+		expect(documented).toMatch(/woke|wake day/i);
 		expect(documented).toMatch(/never a calendar date/i);
+		expect(documented).not.toMatch(/wake to wake/i);
 		// The range a summary takes, both bounds and the default it assumes.
 		expect(documented).toContain("`days`");
 		expect(documented).toMatch(/1\s*(?:[–-]|to)\s*30/);
 		expect(documented).toMatch(/default 7|7 by default/i);
+	});
+
+	it("states which day a sleep is filed under", async () => {
+		const readme = await readFile(readmePath, "utf8");
+
+		const documented = section(readme, "Summary tools");
+
+		// A night crossing midnight belongs to the morning it ends on, not to the
+		// evening it began — the half of the rule a reader of the sleep digest
+		// needs, since every night they see is filed by its wake.
+		expect(documented).toMatch(
+			/a\s+sleep\s+belongs\s+to\s+the\s+(?:morning|day)\s+it\s+ends/i,
+		);
+	});
+
+	it("names the one-day shift the wake-day labels moved most rows by", async () => {
+		const readme = await readFile(readmePath, "utf8");
+
+		const documented = section(readme, "Summary tools");
+
+		// The wake-day rule moved most rows' dates forward a day. Someone comparing a
+		// summary against output they kept from an earlier release reads a
+		// changed date here rather than filing it as changed numbers.
+		expect(documented).toMatch(
+			/(?:forward\s+(?:by\s+)?one\s+day|one\s+day\s+later|a\s+day\s+later)/i,
+		);
+		expect(documented).toMatch(/earlier\s+release|used\s+to|previously/i);
 	});
 });
 
@@ -138,6 +182,50 @@ describe("the README's resource-surface documentation", () => {
 		for (const uri of uris) {
 			expect(documented, `${uri} is undocumented`).toContain(`\`${uri}\``);
 		}
+	});
+
+	it("names every resource template the server serves", async () => {
+		const readme = await readFile(readmePath, "utf8");
+		const documented = section(readme, "Resources");
+
+		const patterns = await advertisedTemplatePatterns();
+
+		// The enumeration itself is load-bearing: an empty answer would let every
+		// pattern below pass vacuously, documenting nothing.
+		expect(patterns).not.toHaveLength(0);
+		for (const pattern of patterns) {
+			expect(documented, `${pattern} is undocumented`).toContain(
+				`\`${pattern}\``,
+			);
+		}
+	});
+
+	it("shows an example day URI and says which day a date names", async () => {
+		const readme = await readFile(readmePath, "utf8");
+
+		const documented = section(readme, "Resources");
+
+		// A pattern tells nobody what to type; an example member does. And the
+		// date in it is the wake day — the morning the user woke, the date the
+		// WHOOP app shows — the same rule every summary is read through, which
+		// is the one thing a person must know before typing one.
+		expect(documented).toMatch(/whoop:\/\/day\/\d{4}-\d{2}-\d{2}/);
+		expect(documented).toMatch(/woke|wake day/i);
+	});
+
+	it("describes the date completion and names the template-listing command", async () => {
+		const readme = await readFile(readmePath, "utf8");
+
+		const documented = section(readme, "Resources");
+
+		// How the variable is filled in: the client completes it, offered the
+		// recent wake days newest first — the order WHOOP lists and the summaries
+		// report — narrowed by what was typed so far. And where the family itself
+		// is found: `resources/templates/list`, since it never joins the plain
+		// listing a picker shows whole.
+		expect(documented).toMatch(/complet/i);
+		expect(documented).toMatch(/newest first/i);
+		expect(documented).toContain("resources/templates/list");
 	});
 
 	it("states that the listing stands whole and the granted scopes gate each read", async () => {
@@ -154,6 +242,18 @@ describe("the README's resource-surface documentation", () => {
 		);
 		expect(documented).toMatch(/granted scopes gate each read/i);
 		expect(documented).toMatch(/refused read names the missing scopes/i);
+	});
+
+	it("describes the login offer beside the refusal rules", async () => {
+		const readme = await readFile(readmePath, "utf8");
+
+		const documented = section(readme, "Resources");
+
+		// The third thing a refused read can mean: no login at all, which is
+		// answered with a consent link rather than prose — under the same
+		// one-decline policy the tools follow. Documented in the same section as
+		// the scope refusals, so a reader met by either knows which they got.
+		expect(documented).toMatch(/consent/i);
 	});
 
 	it("states the snapshot model a read of a resource follows", async () => {

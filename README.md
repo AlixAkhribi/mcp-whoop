@@ -78,12 +78,13 @@ given, and `WHOOP_API_BASE_URL` points the client at an origin other than WHOOP'
 own.
 
 Two more bound the login this server offers inside a conversation, when a tool
-call finds none stored. `WHOOP_LOGIN_WAIT_MS` is how long such a call waits for
-WHOOP to send the browser back before answering "still going" and letting the
-client come round again — 2000 ms, two seconds, by default. `WHOOP_LOGIN_TTL_MS`
-is how long an offer nobody ever answers keeps the loopback port it borrowed to
-catch that redirect: 600000 ms, ten minutes, after which the port goes back to
-the machine and the next call offers a fresh link.
+call or a resource read finds none stored. `WHOOP_LOGIN_WAIT_MS` is how long
+such a request waits for WHOOP to send the browser back before answering "still
+going" and letting the client come round again — 2000 ms, two seconds, by
+default. `WHOOP_LOGIN_TTL_MS` is how long an offer nobody ever answers keeps the
+loopback port it borrowed to catch that redirect: 600000 ms, ten minutes, after
+which the port goes back to the machine and the next request offers a fresh
+link.
 
 Every `WHOOP_*` variable is validated at startup against what the command being
 run actually reads. None is required, but a value that does not parse — a timeout
@@ -126,7 +127,7 @@ this process.
 | `read:sleep` | `list_sleeps` — sleeps and naps, newest first, one page at a time<br>`get_sleep` — one sleep or nap by its id<br>`get_cycle_sleep` — the sleep that started one cycle, by the cycle's id<br>`get_sleep_summary` — the last N nights digested (default 7, max 30), naps counted apart |
 | `read:recovery` | `list_recoveries` — recoveries, newest first, one page at a time<br>`get_cycle_recovery` — the recovery scored for one cycle, by the cycle's id |
 | `read:workout` | `list_workouts` — workouts, newest first, one page at a time<br>`get_workout` — one workout by its id |
-| `read:cycles` + `read:recovery` | `get_recovery_summary` — the last N days digested (default 7, max 30), one row per cycle-day |
+| `read:cycles` + `read:recovery` + `read:sleep` | `get_recovery_summary` — the last N days digested (default 7, max 30), one row per cycle-day |
 | `read:cycles` + `read:recovery` + `read:sleep` | `get_today_snapshot` — how you are today: the cycle running now with its strain so far, its recovery, and the sleep that started it |
 
 Every read scope WHOOP defines now carries a tool here; anything that lands later
@@ -180,9 +181,16 @@ bounds are part of the advertised schema, so a call outside them is refused
 before anything is asked of WHOOP; arbitrary historical windows belong to the
 mapping tools above.
 
-A day here is one WHOOP physiological cycle — wake to wake, labeled by the
-cycle's start in the user's own timezone — never a calendar date. "Today" is the
-cycle running now, which WHOOP scores while it is still being lived.
+A day here is one WHOOP physiological cycle, labeled by the morning the user
+woke into it — the date its opening sleep ended on, read at the user's own
+offset. That is the date the WHOOP app shows for the day, and it is what every
+date here means — never a calendar date of the clock. A sleep belongs to the
+morning it ends on, not to the evening it began. "Today" is the cycle running
+now, which WHOOP scores while it is still being lived.
+
+Earlier releases named a day by the evening its cycle began, so most rows now
+carry the date after the one the same call answered with then. Nothing about the
+numbers changed — only the date naming them moved forward one day.
 
 | Tool | Arguments | Answers |
 | --- | --- | --- |
@@ -203,15 +211,41 @@ URI.
 | `whoop://today` | "How am I today?" — the cycle running now with the strain accumulated in it so far, the recovery scored for it, and the sleep that started it | `read:cycles` + `read:recovery` + `read:sleep` |
 | `whoop://profile` | "Who is this server logged in as?" — the account's name, email address and WHOOP user id | `read:profile` |
 | `whoop://body-measurements` | "What body are these numbers scored against?" — height, weight, max heart rate | `read:body_measurement` |
-| `whoop://recovery/last-week` | "How has my recovery been?" — the last seven cycle-days of recovery digested, one row per day | `read:cycles` + `read:recovery` |
+| `whoop://recovery/last-week` | "How has my recovery been?" — the last seven cycle-days of recovery digested, one row per day | `read:cycles` + `read:recovery` + `read:sleep` |
 | `whoop://sleep/last-week` | "How have I been sleeping?" — the last seven nights digested, naps counted apart, one row per night | `read:sleep` |
+
+One resource *template* stands beside the fixed set: `whoop://day/{date}`, the
+family of day snapshots — the same answer `whoop://today` gives, for any day
+this login has lived, addressed by its date. Fill the variable in to reach one
+member: `whoop://day/2026-08-26`. The date is the wake day — the morning you
+woke, the date the WHOOP app shows for the day — exactly the day rule the
+summary tools above are read through, never a calendar date of the clock. One
+edge of that rule shows here: a cycle WHOOP recorded no opening sleep for falls
+back to the date its start falls on, so a morning still being slept is
+addressable by the evening's date until WHOOP files the sleep.
+
+The template never appears in the plain resource listing: a family is
+advertised as a pattern under `resources/templates/list`, never enumerated,
+and a member exists only when WHOOP holds the day it names. The date is
+completed instead. A client that supports completion is offered the recent
+wake days this login has lived — newest first, the order WHOOP lists and the
+summaries report — narrowed to the dates that start with what was typed so
+far. A completion asked for when nothing is logged in is refused aloud, naming
+the login command: the protocol leaves a completion no way to offer a login,
+so the read that follows makes the offer instead.
 
 The resource list is identical whatever the login was granted. The MCP revision
 this server speaks (2026-07-28) does not allow `resources/list` to vary with
 connection state, and a re-login can rewrite the recorded grant while a client
 stays connected. Granted scopes gate each read against the store as it
 stands when the read runs. A refused read names the missing scopes and the login
-command that fixes them.
+command that fixes them. A read that finds no usable login at all — nothing
+stored, or a refresh WHOOP stopped honoring — is answered with a consent link
+instead, where the client can show one, so you can log in without leaving the
+conversation; decline it once and this serving process offers no more, answering
+every later read with the prose refusal, until a process started later offers
+again. One policy governs the offer across every surface: a tool call, a
+resource, or a day read through the template.
 
 Every entry is a snapshot, not a stream: a read answers with the numbers WHOOP
 holds at that moment, and the client re-reads the URI whenever it wants fresher
@@ -232,9 +266,11 @@ TypeScript source. It spawns this server over stdio exactly as an MCP host does,
 and the stored login carries everything the spawned process needs:
 
 ```sh
-pnpm inspect                                                  # web UI
-pnpm inspect:cli --method resources/list                      # list resources
-pnpm inspect:cli --method resources/read --uri whoop://today  # one of them, read
+pnpm inspect                                                            # web UI
+pnpm inspect:cli --method resources/list                                # list resources
+pnpm inspect:cli --method resources/templates/list                      # list templates
+pnpm inspect:cli --method resources/read --uri whoop://today            # one resource, read
+pnpm inspect:cli --method resources/read --uri whoop://day/2026-08-26   # one day, read
 ```
 
 In the web UI, connect, open the **Resources** tab and press **List Resources**.
@@ -243,10 +279,10 @@ client's picker shows a person. Select one and the JSON a read answers with fill
 the pane beside the list; select it again for a fresher copy. A second read is the
 whole freshness story, since nothing arrives unasked.
 
-The CLI answers the same two questions without a browser, which is the quickest
-way to check what a narrowed login is refused. `resources/list` prints the
-listing, and `resources/read` prints one resource's JSON for the `--uri` you name
-— or, for a scope the login was not granted, the refusal that names it.
+The CLI answers the same questions without a browser, which is the quickest
+way to check what a narrowed login is refused. The listing methods print what is
+advertised, and `resources/read` prints one resource's JSON for the `--uri` you
+name — or, for a scope the login was not granted, the refusal that names it.
 
 ### Logging out
 
