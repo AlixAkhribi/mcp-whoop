@@ -45,10 +45,12 @@ export const manifest = manifestSchema.parse(
 
 /**
  * How long a client may reuse a listing of what this server serves: one hour,
- * for the tools and the resources alike.
+ * for the tools, the resources and the resource templates alike.
  *
  * The resource listing is the same for every login — the grant
- * gates reads, not listings — so any lifetime is honest there. The tool
+ * gates reads, not listings — so any lifetime is honest there, and the
+ * template listing is the same again: a family is advertised as a pattern, so
+ * what it says holds however the days behind it come and go. The tool
  * listing follows the grant read when the serving process starts, and its
  * registrations hold still for that process's life; a cached copy can
  * therefore never show a client anything the process itself would not answer,
@@ -70,11 +72,11 @@ const LIST_TTL_MS = 3_600_000;
  * Every serving unit (connection or request) gets its own instance, never a
  * shared singleton.
  *
- * Both listings are cacheable but never shareable, so they are scoped
+ * Every listing is cacheable but never shareable, so they are scoped
  * `private` — the value the 2026-07-28 revision requires beside the lifetime.
- * (The resource listing is the same for every login and could
- * call itself `public`; `private` claims less, costs a stdio client nothing,
- * and keeps the two listings on one policy.)
+ * (The resource and template listings are the same for every login and could
+ * call themselves `public`; `private` claims less, costs a stdio client
+ * nothing, and keeps the listings on one policy.)
  *
  * The resources capability is declared here rather than left to the first
  * registration to imply, because that is the only way to keep `listChanged`
@@ -84,6 +86,14 @@ const LIST_TTL_MS = 3_600_000;
  * says an absent field means anyway. `subscribe` stays absent for the same
  * reason it is never set: a resource here is a snapshot the client re-reads,
  * not a stream it follows.
+ *
+ * `completions` is declared beside it so both halves of one promise are stated
+ * in the same place: a family advertised as a pattern, and the variable in it
+ * offered as values a person can pick from. The SDK would register the
+ * capability too, off the completer the day template carries, so saying it here
+ * only fixes where a reader finds out — never which registration happens to
+ * imply it. It takes no fields: the specification defines none, and a client
+ * needs nothing beyond knowing the request will be answered.
  */
 export async function createServer(): Promise<McpServer> {
 	const server = new McpServer(
@@ -92,10 +102,17 @@ export async function createServer(): Promise<McpServer> {
 			version: manifest.version,
 		},
 		{
-			capabilities: { resources: { listChanged: false } },
+			capabilities: {
+				resources: { listChanged: false },
+				completions: {},
+			},
 			cacheHints: {
 				"tools/list": { ttlMs: LIST_TTL_MS, cacheScope: "private" },
 				"resources/list": { ttlMs: LIST_TTL_MS, cacheScope: "private" },
+				"resources/templates/list": {
+					ttlMs: LIST_TTL_MS,
+					cacheScope: "private",
+				},
 			},
 		},
 	);
