@@ -284,7 +284,7 @@ export function startLoginAttempt(
 	}
 	const store = resolveTokenStorePath({ env });
 	const already = perStore.get(store);
-	if (already) {
+	if (already !== undefined) {
 		return already;
 	}
 	const starting = openLoginAttempt(store, env);
